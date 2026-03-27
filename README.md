@@ -52,11 +52,11 @@ O robô usa duas estratégias simultâneas para decidir quando comprar ou vender
 - **Estratégia A (30m):** Olha o gráfico de 30 minutos. É mais rápida e reage a mudanças curtas.
 - **Estratégia B (4h):** Olha o gráfico de 4 horas. É mais lenta e busca tendências de longo prazo.
 
-| Variável | Impacto |
-| :--- | :--- |
-| `STRATEGY_X_ENABLED` | Liga ou desliga a estratégia completamente. |
-| `BUY_AMOUNT_X` | Quanto de moeda nativa (POL/BNB) usar na compra. |
-| `SELL_AMOUNT_X` | Quanto do Token (BCOIN/SEN) vender de cada vez. |
+| Variável | Impacto | Detalhes |
+| :--- | :--- | :--- |
+| `STRATEGY_X_ENABLED` | Liga ou desliga a estratégia completamente. | |
+| `BUY_AMOUNT_X` | Quantidade de **Tokens** (ex: BCOIN/SEN) a comprar. | O robô calcula dinamicamente quanto de Native (POL/BNB) é necessário para obter essa quantia exata de tokens. |
+| `SELL_AMOUNT_X` | Quantidade de **Tokens** a vender de cada vez. | Define o tamanho fixo da ordem de venda em unidades do token. |
 
 ---
 
