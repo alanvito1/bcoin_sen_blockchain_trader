@@ -1,3 +1,4 @@
+const axios = require('axios');
 const logger = require('../utils/logger');
 
 /**
@@ -20,11 +21,17 @@ class TelegramService {
     if (!this.enabled) return;
 
     try {
-      // Logic for sending message via Telegram Bot API
-      // Example: fetch(`https://api.telegram.org/bot${this.token}/sendMessage?chat_id=${this.chatId}&text=${encodeURIComponent(message)}`)
-      logger.info(`[Telegram] Enviando notificação: ${message.substring(0, 50)}...`);
+      const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
+      await axios.post(url, {
+        chat_id: this.chatId,
+        text: message,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      });
+      logger.info(`[Telegram] Notificação enviada.`);
     } catch (error) {
-      logger.error(`[Telegram] Erro ao enviar mensagem: ${error.message}`);
+      const errorDetail = error.response?.data?.description || error.message;
+      logger.error(`[Telegram] Erro ao enviar mensagem: ${errorDetail}`);
     }
   }
 
@@ -36,7 +43,13 @@ class TelegramService {
       logger.warn('[Telegram] Serviço desabilitado. Defina TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env');
       return;
     }
-    logger.success('[Telegram] Serviço inicializado com sucesso.');
+    
+    try {
+      await this.sendMessage('<b>🚀 Blockchain Auto-Trader Inicializado</b>\nMonitoramento de mercado ativo.');
+      logger.success('[Telegram] Serviço inicializado e notificação enviada.');
+    } catch (err) {
+      logger.error(`[Telegram] Falha na inicialização: ${err.message}`);
+    }
   }
 }
 

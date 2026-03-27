@@ -3,6 +3,7 @@ const config = require('../config');
 const { wallets, mevWallets } = require('./blockchain');
 const explorer = require('../utils/explorer');
 const logger = require('../utils/logger');
+const telegram = require('./telegram');
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -150,6 +151,9 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     }
 
     logger.info(`[${networkName}] 💸 Operação de ${direction.toUpperCase()} Enviada (${amountInFormatted} ${isNativeIn ? 'Native' : tokenConfig.symbol})`);
+    
+    const tg = telegram.getInstance();
+    tg?.sendMessage(`<b>💸 Ordem Enviada (${networkName.toUpperCase()})</b>\n<b>Token:</b> ${tokenConfig.symbol}\n<b>Ação:</b> ${direction.toUpperCase()}\n<b>Qtd:</b> ${amountInFormatted} ${isNativeIn ? 'Native' : tokenConfig.symbol}`);
 
     const bridges = networkName === 'polygon' 
       ? [network.usdt, '0x7ceB23fD6bC0ad59E62c2551523066Ab99653907', '0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', '0x8f3Cf7ad23Cd3BaBB3b0195a012d081919717075'] 
@@ -248,8 +252,10 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       const gasFormatted = parseFloat(ethers.formatEther(gasCost)).toFixed(6);
       const nativeSymbol = networkName === 'polygon' ? 'POL' : 'BNB';
       logger.success(`[${networkName}] 🎊 Sucesso! (Gas: ${gasFormatted} ${nativeSymbol})`);
+      telegram.getInstance()?.sendMessage(`<b>✅ Sucesso (${networkName.toUpperCase()})</b>\n<b>Token:</b> ${tokenConfig.symbol}\n<b>Gas:</b> ${gasFormatted} ${nativeSymbol}\n<a href="${explorer.getExplorerLink(networkName, tx.hash)}">Ver no Explorer</a>`);
     } else {
       logger.error(`[${networkName}] Falha na transação.`);
+      telegram.getInstance()?.sendMessage(`<b>❌ Falha (${networkName.toUpperCase()})</b>\n<b>Token:</b> ${tokenConfig.symbol}\nTransação falhou na blockchain.`);
     }
 
   } catch (error) {

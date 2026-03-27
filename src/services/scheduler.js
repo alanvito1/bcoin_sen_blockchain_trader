@@ -2,6 +2,7 @@ const config = require('../config');
 const swapper = require('./swapper');
 const indicator = require('./indicator');
 const logger = require('../utils/logger');
+const telegram = require('./telegram');
 
 let targetMin1 = -1;
 let targetMin2 = -1;
@@ -76,6 +77,8 @@ async function performAllTrades() {
   console.log(`\n${logger.colors.cyan}================================================================${logger.colors.reset}`);
   logger.info(`🚀 ${logger.colors.magenta}Iniciando Ciclo de Estratégias (${modeStr})${logger.colors.reset}`);
   console.log(`${logger.colors.cyan}================================================================${logger.colors.reset}`);
+  
+  telegram.getInstance()?.sendMessage(`<b>🛰 Início de Ciclo</b>\nModo: ${require('../config').strategy.dryRun ? 'DRY RUN' : 'LIVE'}`);
 
   for (const networkName of Object.keys(config.networks)) {
     const network = config.networks[networkName];
