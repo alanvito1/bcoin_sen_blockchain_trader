@@ -83,5 +83,10 @@ module.exports = {
       explorerApi: process.env.POLYGONSCAN_API_KEY,
       mevRpc: process.env.POLYGON_MEV_RPC
     }
+  },
+
+  telegram: {
+    token: process.env.TELEGRAM_BOT_TOKEN,
+    chatId: process.env.TELEGRAM_CHAT_ID
   }
 };

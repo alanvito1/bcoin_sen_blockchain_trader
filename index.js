@@ -41,6 +41,10 @@ async function main() {
       console.log('Carteira carregada com sucesso.');
     }
 
+    // Start the telegram service
+    const telegram = require('./src/services/telegram');
+    await telegram.init(require('./src/config').telegram);
+
     // Start the scheduler
     await start();
   } catch (error) {
