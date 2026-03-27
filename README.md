@@ -1,75 +1,87 @@
 # 🚀 Blockchain Auto-Trader (Polygon & BSC)
 
-Autonomous trading bot designed for decentralized exchanges (DEXs) on EVM-compatible networks. The bot executes swaps based on a scheduled strategy with randomized execution windows to mimic human behavior and optimize gas fees.
-
-## 🛠️ Tech Stack
-
-- **Runtime:** Node.js
-- **Blockchain Interface:** [ethers.js (v6)](https://docs.ethers.org/v6/)
-- **Data Fetching:** Axios
-- **Scheduling:** node-cron
-- **Configuration:** dotenv
-- **Executable Packaging:** [pkg](https://github.com/vercel/pkg)
-
-## 🗺️ Application Map
-
-```text
-blockchain-trader/
-├── src/
-│   ├── config/       # Environment variable loading and bot settings
-│   ├── services/     # Core business logic
-│   │   ├── blockchain.js  # RPC connections, balances, and gas management
-│   │   ├── indicator.js   # (Optional) Market analysis and decision logic
-│   │   ├── scheduler.js   # Job orchestration and randomized timing
-│   │   └── swapper.js     # DEX interaction (Swap execution)
-│   ├── utils/        # Shared helper modules
-│   │   ├── explorer.js    # Link generators for Block Explorers
-│   │   └── logger.js      # Centralized logging system
-│   └── index.js      # Main entry point (initializes services)
-├── tools/            # Maintenance and recovery utilities
-├── scripts/          # Automation and setup helper scripts
-├── test/             # Unit and integration test suites
-└── package.json      # Project dependencies and build scripts
-```
-
-## ⚙️ How It Works
-
-1. **Initialization:** `index.js` loads the configuration from `.env` and starts the `scheduler.js`.
-2. **Scheduling:** The bot operates in two hourly windows. For each hour, it picks a random minute within each window to perform a check/trade.
-3. **Execution:**
-   - The `scheduler` calls `swapper` to initiate a trade.
-   - `swapper` checks balances via `blockchain.js`.
-   - If conditions are met, a swap transaction is sent to the network.
-4. **Resilience:** The bot handles RPC failures and maintains logs in the `/logs` directory (optional metadata).
-
-## 🚀 Getting Started
-
-1. **Configure Environment:**
-   Edit `.env` with your credentials:
-   ```ini
-   PRIVATE_KEY=0x...
-   # Window 1 (Minutes 0-29)
-   WINDOW1_MIN=0
-   WINDOW1_MAX=29
-   # Window 2 (Minutes 30-59)
-   WINDOW2_MIN=30
-   WINDOW2_MAX=59
-   ```
-
-2. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Run the Bot:**
-   ```bash
-   npm start
-   ```
-
-4. **Build Executable:**
-   ```bash
-   npx pkg .
-   ```
+Este é um robô de trading autônomo projetado para operar em corretoras descentralizadas (DEXs) nas redes Polygon e BSC. Ele segue uma estratégia de "compra na baixa e venda na alta" baseada em Médias Móveis, com execuções aleatórias para simular comportamento humano.
 
 ---
-*Developed for autonomous asset management on decentralized networks.*
+
+## 📖 Para Iniciantes: Começando do Zero
+
+Se você nunca rodou um projeto de programação antes, siga este passo a passo simples para preparar seu computador:
+
+### 1. Instalar o "Motor" (Node.js)
+O robô precisa do **Node.js** para funcionar.
+- Acesse: [nodejs.org](https://nodejs.org/)
+- Baixe a versão **LTS** (Long Term Support).
+- Instale como qualquer outro programa no Windows (basta ir clicando em "Next").
+
+### 2. Abrir o Terminal (PowerShell)
+No Windows, o terminal é onde você digita comandos para o robô.
+- Aperte as teclas `Windows + X` no seu teclado.
+- Escolha **Terminal**, **Windows PowerShell** ou **Prompt de Comando**.
+
+### 3. Preparar a Pasta do Projeto
+- Baixe o projeto e extraia em uma pasta (ex: `C:\RoboTrader`).
+- No terminal, navegue até essa pasta digitando:
+  ```powershell
+  cd C:\RoboTrader
+  ```
+
+### 4. Instalar as Dependências
+Com o terminal aberto na pasta certa, digite:
+```bash
+npm install
+```
+*Isso vai baixar todos os módulos necessários para o robô conversar com a Blockchain.*
+
+---
+
+## ⚙️ Guia de Configuração (O arquivo .env)
+
+O arquivo `.env` é o "cérebro" das suas configurações. **Nunca compartilhe sua chave privada!**
+
+| Variável | O que faz? | Impacto no Robô |
+| :--- | :--- | :--- |
+| `PRIVATE_KEY` | Sua chave de carteira (sem o 0x). | Define de onde saem os fundos e onde entram os lucros. |
+| `DRY_RUN` | Modo de teste (`true` ou `false`). | Se for `true`, o robô simula tudo mas **não gasta dinheiro real**. |
+| `SLIPPAGE` | Tolerância de preço (ex: `1.0` = 1%). | Evita que você compre por um preço muito mais caro que o planejado. |
+| `WINDOW1_MIN/MAX` | Intervalo de minutos (ex: 15 a 29). | O robô sorteia **um minuto aleatório** nesse intervalo a cada hora para operar. |
+| `WINDOW2_MIN/MAX` | Intervalo de minutos (ex: 45 a 59). | Garante uma segunda operação em horário diferente, aumentando o sigilo. |
+
+### Estratégias (A e B)
+O robô usa duas estratégias simultâneas para decidir quando comprar ou vender:
+- **Estratégia A (30m):** Olha o gráfico de 30 minutos. É mais rápida e reage a mudanças curtas.
+- **Estratégia B (4h):** Olha o gráfico de 4 horas. É mais lenta e busca tendências de longo prazo.
+
+| Variável | Impacto |
+| :--- | :--- |
+| `STRATEGY_X_ENABLED` | Liga ou desliga a estratégia completamente. |
+| `BUY_AMOUNT_X` | Quanto de moeda nativa (POL/BNB) usar na compra. |
+| `SELL_AMOUNT_X` | Quanto do Token (BCOIN/SEN) vender de cada vez. |
+
+---
+
+## 🧩 Como o Robô Funciona (Mecanismos)
+
+1. **Sorteio de Horários:** No início de cada hora, o robô escolhe dois minutos secretos (um em cada "Janela"). Isso evita que o mercado ou bots de arbitragem prevejam seus movimentos.
+2. **Análise de Média Móvel (MA21):**
+   - **Preço ABAIXO da linha:** O robô entende que o preço está "barato" e tenta **COMPRAR**.
+   - **Preço ACIMA da linha:** O robô entende que o preço está "caro" e tenta **VENDER** (lucro).
+3. **Consolidação de Decisões:** Se uma estratégia manda comprar e a outra manda vender, o robô prioriza a estratégia de tempo maior (4h) para evitar erros.
+4. **Gestão de Gás (USDT):** Se o robô detectar que você tem USDT e está ficando sem saldo para taxas (Native), ele vende um pouco de USDT automaticamente para repor seu saldo de POL/BNB.
+
+---
+
+## 🚀 Comandos de Execução
+
+- **Iniciar o Robô:**
+  ```bash
+  npm start
+  ```
+- **Criar um Executável (.exe) para Windows:**
+  ```bash
+  npx pkg .
+  ```
+  *Isso cria um arquivo `.exe` que você pode rodar em qualquer computador sem precisar instalar o Node.js novamente.*
+
+---
+*Desenvolvido para gestão autônoma de ativos em redes descentralizadas. Use com responsabilidade.*
