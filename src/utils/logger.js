@@ -1,35 +1,30 @@
-const colors = {
-  reset: '\x1b[0m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
-  cyan: '\x1b[36m',
-  magenta: '\x1b[35m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m'
-};
+const { createLogger, format, transports } = require('winston');
 
-function getTimestamp() {
-  return `${colors.gray}[${new Date().toLocaleTimeString()}]${colors.reset}`;
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    format.splat(),
+    format.json()
+  ),
+  defaultMeta: { service: 'blockchain-trader' },
+  transports: [
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' }),
+  ],
+});
+
+// If not in production, log to console with a simpler format
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new transports.Console({
+    format: format.combine(
+      format.colorize(),
+      format.printf(({ timestamp, level, message, ...meta }) => {
+        return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
+      })
+    ),
+  }));
 }
-
-const logger = {
-  colors,
-  info: (msg) => console.log(`${getTimestamp()} ${msg}`),
-  warn: (msg) => console.warn(`${getTimestamp()} ${colors.yellow}⚠️  ${msg}${colors.reset}`),
-  error: (msg, err) => {
-    console.error(`${getTimestamp()} ${colors.red}❌ ${msg}${colors.reset}`);
-    if (err) console.error(err);
-  },
-  success: (msg) => console.log(`${getTimestamp()} ${colors.green}✅ ${msg}${colors.reset}`),
-  step: (msg) => console.log(`${getTimestamp()} ${colors.cyan}➔ ${msg}${colors.reset}`),
-  highlight: (msg) => `${colors.white}${msg}${colors.reset}`,
-  dim: (msg) => `${colors.gray}${msg}${colors.reset}`,
-  cyan: (msg) => `${colors.cyan}${msg}${colors.reset}`,
-  magenta: (msg) => `${colors.magenta}${msg}${colors.reset}`,
-  yellow: (msg) => `${colors.yellow}${msg}${colors.reset}`,
-  red: (msg) => `${colors.red}${msg}${colors.reset}`,
-  green: (msg) => `${colors.green}${msg}${colors.reset}`
-};
 
 module.exports = logger;

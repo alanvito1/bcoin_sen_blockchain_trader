@@ -1,87 +1,80 @@
-# 🚀 Blockchain Auto-Trader (Polygon & BSC)
+# 🚀 Blockchain Trader: Multi-Chain Auto-Trader Bot
 
-Este é um robô de trading autônomo projetado para operar em corretoras descentralizadas (DEXs) nas redes Polygon e BSC. Ele segue uma estratégia de "compra na baixa e venda na alta" baseada em Médias Móveis, com execuções aleatórias para simular comportamento humano.
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-Mock-gray.svg?style=flat-square)]()
+[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg?style=flat-square)]()
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)]()
+[![Blockchain](https://img.shields.io/badge/Networks-BSC%20%7C%20Polygon-orange.svg?style=flat-square)]()
+
+**O 'Blockchain Trader' é um sistema de trading autônomo de alta precisão projetado para operar tokens (BCOIN, SEN) nas redes BSC e Polygon. Equipado com indicadores técnicos (MA, RSI) e proteção anti-sanduíche, o bot automatiza o ciclo completo de trade via Telegram.**
 
 ---
 
-## 📖 Para Iniciantes: Começando do Zero
+## 🔥 Por que este projeto? (The "Why")
 
-Se você nunca rodou um projeto de programação antes, siga este passo a passo simples para preparar seu computador:
+O mercado de tokens em blockchains alternativas (EVM) exige velocidade e disciplina. Manter o controle manual sobre cruzamentos de médias e janelas de trade é exaustivo. O **Blockchain Trader** resolve isso:
+-   **Disciplina de Sinais**: Executa ordens apenas quando indicadores MA21 e RSI confirmam o ponto de entrada/saída.
+-   **Proteção de Ativos**: Sistema de roteamento inteligente que evita perdas por derrapagem (slippage) extrema.
+-   **Gerenciamento Multi-Chain**: Uma única interface para gerir trades em redes diferentes simultaneamente.
 
-### 1. Instalar o "Motor" (Node.js)
-O robô precisa do **Node.js** para funcionar.
-- Acesse: [nodejs.org](https://nodejs.org/)
-- Baixe a versão **LTS** (Long Term Support).
-- Instale como qualquer outro programa no Windows (basta ir clicando em "Next").
+---
 
-### 2. Abrir o Terminal (PowerShell)
-No Windows, o terminal é onde você digita comandos para o robô.
-- Aperte as teclas `Windows + X` no seu teclado.
-- Escolha **Terminal**, **Windows PowerShell** ou **Prompt de Comando**.
+## 🏗️ Mapa de Arquitetura (High-Level)
 
-### 3. Preparar a Pasta do Projeto
-- Baixe o projeto e extraia em uma pasta (ex: `C:\RoboTrader`).
-- No terminal, navegue até essa pasta digitando:
-  ```powershell
-  cd C:\RoboTrader
-  ```
-
-### 4. Instalar as Dependências
-Com o terminal aberto na pasta certa, digite:
-```bash
-npm install
+```mermaid
+graph LR
+    User((Usuário)) <--> Bot[Bot UI (Telegram)]
+    Bot <--> DB[(Prisma / Postgres)]
+    Scanner[Auto-Scanner] -->|Sinais| DB
+    Scanner -->|Jobs| Queue((Redis / BullMQ))
+    Queue -->|Processa| Executor[Trade Executor]
+    Executor --> DEX[DEX / On-Chain]
 ```
-*Isso vai baixar todos os módulos necessários para o robô conversar com a Blockchain.*
 
 ---
 
-## ⚙️ Guia de Configuração (O arquivo .env)
+## ⚡ Quick Start (Guia Rápido)
 
-O arquivo `.env` é o "cérebro" das suas configurações. **Nunca compartilhe sua chave privada!**
+### 1. Pré-requisitos
+-   Node.js v18+
+-   Docker e Docker-Compose
+-   Telegram Bot Token (via @BotFather)
 
-| Variável | O que faz? | Impacto no Robô |
-| :--- | :--- | :--- |
-| `PRIVATE_KEY` | Sua chave de carteira (sem o 0x). | Define de onde saem os fundos e onde entram os lucros. |
-| `DRY_RUN` | Modo de teste (`true` ou `false`). | Se for `true`, o robô simula tudo mas **não gasta dinheiro real**. |
-| `SLIPPAGE` | Tolerância de preço (ex: `1.0` = 1%). | Evita que você compre por um preço muito mais caro que o planejado. |
-| `WINDOW1_MIN/MAX` | Intervalo de minutos (ex: 15 a 29). | O robô sorteia **um minuto aleatório** nesse intervalo a cada hora para operar. |
-| `WINDOW2_MIN/MAX` | Intervalo de minutos (ex: 45 a 59). | Garante uma segunda operação em horário diferente, aumentando o sigilo. |
+### 2. Configuração (1 Click)
+```bash
+# Clone e entre na pasta
+git clone https://github.com/alanvito1/bcoin_sen_blockchain_trader.git
+cd bcoin_sen_blockchain_trader
 
-### Estratégias (A e B)
-O robô usa duas estratégias simultâneas para decidir quando comprar ou vender:
-- **Estratégia A (30m):** Olha o gráfico de 30 minutos. É mais rápida e reage a mudanças curtas.
-- **Estratégia B (4h):** Olha o gráfico de 4 horas. É mais lenta e busca tendências de longo prazo.
+# Copie o ambiente e edite as variáveis essenciais
+cp .env.example .env
 
-| Variável | Impacto | Detalhes |
-| :--- | :--- | :--- |
-| `STRATEGY_X_ENABLED` | Liga ou desliga a estratégia completamente. | |
-| `BUY_AMOUNT_X` | Quantidade de **Tokens** (ex: BCOIN/SEN) a comprar. | O robô calcula dinamicamente quanto de Native (POL/BNB) é necessário para obter essa quantia exata de tokens. |
-| `SELL_AMOUNT_X` | Quantidade de **Tokens** a vender de cada vez. | Define o tamanho fixo da ordem de venda em unidades do token. |
+# Suba a infraestrutura (DB + Redis)
+docker-compose up -d
 
----
-
-## 🧩 Como o Robô Funciona (Mecanismos)
-
-1. **Sorteio de Horários:** No início de cada hora, o robô escolhe dois minutos secretos (um em cada "Janela"). Isso evita que o mercado ou bots de arbitragem prevejam seus movimentos.
-2. **Análise de Média Móvel (MA21):**
-   - **Preço ABAIXO da linha:** O robô entende que o preço está "barato" e tenta **COMPRAR**.
-   - **Preço ACIMA da linha:** O robô entende que o preço está "caro" e tenta **VENDER** (lucro).
-3. **Consolidação de Decisões:** Se uma estratégia manda comprar e a outra manda vender, o robô prioriza a estratégia de tempo maior (4h) para evitar erros.
-4. **Gestão de Gás (USDT):** Se o robô detectar que você tem USDT e está ficando sem saldo para taxas (Native), ele vende um pouco de USDT automaticamente para repor seu saldo de POL/BNB.
+# Inicialize o banco e o bot
+npm install
+npx prisma migrate dev
+npm start
+```
 
 ---
 
-## 🚀 Comandos de Execução
+## 📖 Documentação Completa (Deep Scribe ✍️)
 
-- **Iniciar o Robô:**
-  ```bash
-  npm start
-  ```
-- **Criar um Executável (.exe) para Windows:**
-  ```bash
-  npx pkg .
-  ```
-  *Isso cria um arquivo `.exe` que você pode rodar em qualquer computador sem precisar instalar o Node.js novamente.*
+Para uma imersão técnica profunda, explore os seguintes manuais:
+
+-   [🗺️ SYSTEM_ATLAS.md](file:///c:/Projetos/blockchain-trader/SYSTEM_ATLAS.md): Inventário completo de serviços, tabelas e fluxos.
+-   [🏗️ ARCHITECTURE.md](file:///c:/Projetos/blockchain-trader/ARCHITECTURE.md): Diagramas técnicos de sequência, ERD e Segurança.
+-   [🛠️ USAGE_GUIDE.md](file:///c:/Projetos/blockchain-trader/USAGE_GUIDE.md): Manual do usuário final e menus do bot.
+-   [🔎 SCRIBE_JOURNAL.md](file:///c:/Projetos/blockchain-trader/SCRIBE_JOURNAL.md): GAP Analysis e dívidas técnicas mapeadas.
 
 ---
-*Desenvolvido para gestão autônoma de ativos em redes descentralizadas. Use com responsabilidade.*
+
+## 🏁 Glossário de Termos
+-   **MA (Moving Average):** Média móvel ponderada usada para identificar tendência.
+-   **RSI (Relative Strength Index):** Indicador de força que aponta sobrecompra ou sobrevenda.
+-   **Slippage:** A diferença entre o preço esperado do trade e o preço executado.
+-   **RPC:** Gateway de comunicação com a Blockchain (BSC/Polygon).
+
+---
+*Desenvolvido com ✍️ por Deep Scribe Agent.*

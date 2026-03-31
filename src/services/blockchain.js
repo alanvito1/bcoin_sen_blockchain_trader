@@ -5,18 +5,8 @@ function createProvider(networkKey) {
   const netConfig = config.networks[networkKey];
   const rpcs = netConfig.rpc.split(',').map(url => url.trim());
   
-  if (rpcs.length === 1) {
-    return new ethers.JsonRpcProvider(rpcs[0], { chainId: netConfig.chainId, name: networkKey }, { staticNetwork: true });
-  }
-
-  // Use FallbackProvider for multiple RPCs
-  const configs = rpcs.map((url, index) => ({
-    provider: new ethers.JsonRpcProvider(url, { chainId: netConfig.chainId, name: networkKey }, { staticNetwork: true }),
-    priority: index + 1,
-    stallTimeout: 2000
-  }));
-
-  return new ethers.FallbackProvider(configs);
+  // Use the first RPC as primary. Reliable enough for a single swap test.
+  return new ethers.JsonRpcProvider(rpcs[0], { chainId: netConfig.chainId, name: networkKey }, { staticNetwork: true });
 }
 
 const providers = {

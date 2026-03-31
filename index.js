@@ -1,58 +1,26 @@
 require('dotenv').config();
-const { start } = require('./src/services/scheduler');
-const readline = require('readline');
+const prisma = require('./src/config/prisma');
+const logger = require('./src/utils/logger');
 
-async function waitExit() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  return new Promise(resolve => rl.question('\nPrecione ENTER para sair...', () => {
-    rl.close();
-    resolve();
-  }));
-}
+// Start Bot
+const bot = require('./src/bot/index');
 
-process.on('uncaughtException', async (err) => {
-  console.error('\n❌ EXCEÇÃO NÃO CAPTURADA:');
-  console.error(err);
-  await waitExit();
-  process.exit(1);
-});
+// Start Workers
+const scanner = require('./src/worker/scanner');
+const tradeExecutor = require('./src/worker/tradeExecutor');
+const billingCron = require('./src/worker/billingCron');
+const { notificationWorker } = require('./src/worker/notificationWorker');
 
-process.on('unhandledRejection', async (reason, promise) => {
-  console.error('\n❌ REJEIÇÃO NÃO TRATADA:');
-  console.error(reason);
-  await waitExit();
-  process.exit(1);
-});
+logger.info('🚀 [System] Multi-tenant Auto-Trader initialized.');
+logger.info('- Bot UI: Online');
+logger.info('- Scanner: Active (1m interval)');
+logger.info('- Trade Executor: Listening on Redis');
 
-async function main() {
-  console.log('--- Blockchain Auto-Trader ---');
-  console.log('Verificando ambiente...');
-
+// Basic Health Check
+setInterval(async () => {
   try {
-    if (!process.env.PRIVATE_KEY) {
-      console.warn('WARNING: PRIVATE_KEY não encontrada no arquivo .env.');
-      console.log('Certifique-se de que o arquivo .env existe na mesma pasta que o .exe');
-      await waitExit();
-      process.exit(1);
-    } else {
-      console.log('Carteira carregada com sucesso.');
-    }
-
-    // Start the telegram service
-    const telegram = require('./src/services/telegram');
-    await telegram.init(require('./src/config').telegram);
-
-    // Start the scheduler
-    await start();
-  } catch (error) {
-    console.error('\n❌ ERRO FATAL NA APLICAÇÃO:');
-    console.error(error);
-    await waitExit();
-    process.exit(1);
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (e) {
+    logger.error('❌ [Database] Connection lost:', e.message);
   }
-}
-
-main();
+}, 60000);

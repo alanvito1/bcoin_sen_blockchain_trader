@@ -1,3 +1,10 @@
+/**
+ * @file swapper.js
+ * @description Service for executing on-chain token swaps on decentralized exchanges (PancakeSwap, QuickSwap).
+ * Features include multi-hop routing, anti-sandwich protection via dynamic slippage, and RPC resilience.
+ * @module services/swapper
+ */
+
 const { ethers } = require('ethers');
 const config = require('../config');
 const { wallets, mevWallets } = require('./blockchain');
@@ -19,7 +26,13 @@ const ROUTER_ABI = [
 ];
 
 /**
- * Helper to retry RPC calls on transient errors like "Unknown block"
+ * Helper to retry RPC calls on transient errors like "Unknown block" or provider timeouts.
+ * @param {Function} fn - The async function to execute.
+ * @param {string} networkName - Name of the network (e.g., 'bsc').
+ * @param {number} [retries=3] - Number of retry attempts.
+ * @param {number} [delay=2000] - Delay between retries in ms.
+ * @returns {Promise<any>} Result of the function execution.
+ * @throws {Error} If all retries fail.
  */
 async function withRPCRetry(fn, networkName, retries = 3, delay = 2000) {
   try {
@@ -38,6 +51,12 @@ async function withRPCRetry(fn, networkName, retries = 3, delay = 2000) {
   }
 }
 
+/**
+ * Checks if there are pending transactions in the wallet to prevent nonce collisions.
+ * @param {string} networkName - Network name.
+ * @param {ethers.Wallet} wallet - The signer wallet.
+ * @returns {Promise<boolean>} True if there are pending transactions.
+ */
 async function checkPendingTransactions(networkName, wallet) {
   const [nonceLatest, noncePending] = await Promise.all([
     withRPCRetry(() => wallet.getNonce('latest'), networkName),
@@ -52,6 +71,15 @@ async function checkPendingTransactions(networkName, wallet) {
   return false;
 }
 
+/**
+ * Finds the best trade path (direct or through bridge tokens) to maximize output.
+ * @param {ethers.Contract} routerContract - The DEX router contract.
+ * @param {bigint} amountIn - Amount to swap in wei.
+ * @param {string} tokenIn - Address of token in.
+ * @param {string} tokenOut - Address of token out.
+ * @param {Array<string>} bridgeTokens - List of bridge token addresses (WETH, USDT, etc).
+ * @returns {Promise<Array<string>|null>} The best path detected.
+ */
 async function getBestPath(routerContract, amountIn, tokenIn, tokenOut, bridgeTokens = []) {
   const paths = [[tokenIn, tokenOut]];
   for (const bridge of bridgeTokens) {
@@ -78,11 +106,38 @@ async function getBestPath(routerContract, amountIn, tokenIn, tokenOut, bridgeTo
   return bestPath;
 }
 
-async function swapToken(networkName, tokenConfig, direction = 'sell', customAmount = null, amountType = 'native', marketPrice = null) {
-  const wallet = wallets[networkName];
+/**
+ * Main function to execute a token swap on the blockchain.
+ * Includes allowance check, multi-hop routing, and price impact protection.
+ * @param {string} networkName - 'bsc' or 'polygon'.
+ * @param {Object} tokenConfig - Token metadata (address, decimals, symbol).
+ * @param {string} [direction='sell'] - 'buy' or 'sell'.
+ * @param {number|string} [customAmount=null] - Amount to swap.
+ * @param {string} [amountType='native'] - 'native' (BNB/POL) or 'token'.
+ * @param {number} [marketPrice=null] - Global market price for anti-sandwich check.
+ * @param {ethers.Wallet} [externalSigner=null] - Optional specific wallet to use.
+ * @returns {Promise<Object|null>} Transaction receipt or error object.
+ */
+async function swapToken(networkName, tokenConfig, direction = 'sell', customAmount = null, amountType = 'native', marketPrice = null, externalSigner = null) {
+  // 1. Resolve Wallet (Use external signer if provided, otherwise global admin wallet)
+  let wallet = externalSigner || wallets[networkName];
   if (!wallet) {
     logger.error(`[${networkName}] Wallet not configured.`);
-    return;
+    return null;
+  }
+
+  // 2. Resolve MEV Wallet for broadcasting
+  // If externalSigner is provided, we try to reconnect it to the MEV provider
+  let broadcastWallet = wallet;
+  try {
+    const mevProvider = require('./blockchain').mevProviders[networkName];
+    if (mevProvider && wallet.privateKey) {
+        broadcastWallet = new ethers.Wallet(wallet.privateKey, mevProvider);
+    } else {
+        broadcastWallet = require('./blockchain').mevWallets[networkName] || wallet;
+    }
+  } catch (e) {
+    // Fallback to current internal wallet
   }
 
   const network = config.networks[networkName];
@@ -93,10 +148,11 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     const isStuck = await checkPendingTransactions(networkName, wallet);
     if (isStuck) {
       logger.error(`[${networkName}] Não é seguro operar ${tokenConfig.symbol} com transações pendentes.`);
-      return;
+      return null;
     }
 
     let tokenIn, tokenOut, amountIn, amountInFormatted;
+
     let isNativeIn = false;
     let isNativeOut = false;
 
@@ -174,43 +230,59 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     const amountsOut = await withRPCRetry(() => routerContract.getAmountsOut(amountIn, path), networkName);
     const expectedOut = amountsOut[amountsOut.length - 1];
 
-    // --- Price Impact & Sandwich Protection ---
+    // --- Dynamic Slippage & Anti-Sandwich Intelligence ---
+    let amountOutMin;
     if (marketPrice) {
       const amountInNum = parseFloat(ethers.formatUnits(amountIn, isNativeIn ? 18 : tokenConfig.decimals));
       const expectedOutNum = parseFloat(ethers.formatUnits(expectedOut, isNativeOut ? 18 : tokenConfig.decimals));
       
-      if (isNaN(amountInNum) || isNaN(expectedOutNum)) {
-        logger.error(`[${networkName}] Erro ao converter para Number: amountInNum=${amountInNum}, expectedOutNum=${expectedOutNum}`);
-      }
-      
-      let fairOut;
+      let fairOutNum;
       if (direction === 'buy') {
-        fairOut = amountInNum / marketPrice;
+        fairOutNum = amountInNum / marketPrice;
       } else {
-        fairOut = amountInNum * marketPrice;
+        fairOutNum = amountInNum * marketPrice;
       }
 
-      const ratio = expectedOutNum / fairOut;
-      const impact = (1 - ratio) * 100;
+      const impact = (1 - (expectedOutNum / fairOutNum)) * 100;
+      const userSlippage = config.slippage || 1.0;
+      // 'Agressivo': Use a higher dynamic floor if the user set it low
+      const dynamicTolerance = Math.max(userSlippage, 10.0); // 10% tolerance for aggressive mode
 
-      if (ratio < 0.85) { // 15% deviation guard
-        logger.error(`[${networkName}] ⚠️ ALERTA DE IMPACTO: Rota ruim ou possível Sandwich! Esperado: ${expectedOutNum.toFixed(4)} | Justo: ${fairOut.toFixed(4)} (${(impact || 0).toFixed(2)}% impact)`);
-        if (!config.strategy.dryRun) return; // Abort live trade
-      } else if (impact > 5) {
-        logger.warn(`[${networkName}] Impacto de preço alto: ${(impact || 0).toFixed(2)}%`);
+      // Calculate the 'Fair Price Floor' (The minimum we accept based on global market price)
+      const fairOut = direction === 'buy'
+        ? ethers.parseUnits(fairOutNum.toString(), tokenConfig.decimals)
+        : ethers.parseUnits(fairOutNum.toString(), 18);
+      
+      amountOutMin = (fairOut * (10000n - BigInt(Math.floor(dynamicTolerance * 100)))) / 10000n;
+
+      if (impact > 20) { // 'Agressivo': Hard guard only at 20% (extreme sandwich/low liq)
+        logger.error(`[${networkName}] 🥪 IMPACTO EXTREMO (Sandwich?): Impacto detectado: ${impact.toFixed(2)}%. Abortando.`);
+        if (!config.strategy.dryRun) return { status: 0, error: `Extreme Price Impact: ${impact.toFixed(2)}%` };
+      } else if (impact > 10) {
+        logger.warn(`[${networkName}] Impacto de preço alto (${impact.toFixed(2)}%). Prosseguindo em modo AGRESSIVO.`);
       }
+
+
+      // Final Check: If the DEX pool expected output is ALREADY below our fair price floor, abort before sending.
+      if (expectedOut < amountOutMin) {
+        logger.error(`[${networkName}] ❌ Preço Indisponível: Pool DEX (${expectedOutNum.toFixed(4)}) abaixo do Piso de Segurança (${ethers.formatUnits(amountOutMin, isNativeOut ? 18 : tokenConfig.decimals)}).`);
+        if (!config.strategy.dryRun) return { status: 0, error: 'DEX Pool price below safety floor' };
+      }
+
+    } else {
+      // Legacy fallback if no marketPrice provided (not recommended)
+      const slippageBps = BigInt(Math.floor((config.slippage || 1.0) * 100));
+      amountOutMin = (expectedOut * (10000n - slippageBps)) / 10000n;
     }
 
-    const slippageBps = BigInt(Math.floor(config.slippage * 100));
-    const amountOutMin = (expectedOut * (10000n - slippageBps)) / 10000n;
 
     if (config.strategy.dryRun) {
       logger.info(`${logger.colors.yellow}[DRY RUN] Simulação OK: ${amountInFormatted} ➔ ${ethers.formatUnits(amountOutMin, direction === 'buy' ? tokenConfig.decimals : 18)} output min.${logger.colors.reset}`);
-      return;
+      return { status: 1, hash: '0x' + 'd'.repeat(64), isDryRun: true };
     }
 
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-    let overrideOptions = { gasLimit: 350000 };
+    let overrideOptions = { gasLimit: 300000 };
     if (isNativeIn) overrideOptions.value = amountIn;
 
     if (networkName === 'polygon') {
@@ -221,8 +293,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       }
     }
 
-    // Use MEV-protected wallet for broadcasting if available
-    const broadcastWallet = mevWallets[networkName] || wallet;
+    // Use established broadcastWallet (which may be mev-connected)
     const mevRouterContract = new ethers.Contract(network.router, ROUTER_ABI, broadcastWallet);
 
     logger.info(`[${networkName}] Enviando transação de ${direction}...`);
@@ -234,7 +305,6 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       ], broadcastWallet);
       tx = await withRPCRetry(() => routerBuy.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, wallet.address, deadline, overrideOptions), networkName);
     } else if (isNativeOut) {
-      const mevTokenContract = new ethers.Contract(tokenConfig.address, ERC20_ABI, broadcastWallet);
       tx = await withRPCRetry(() => mevRouterContract.swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, overrideOptions), networkName);
     } else {
       tx = await withRPCRetry(() => mevRouterContract.swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, overrideOptions), networkName);
@@ -251,18 +321,29 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       const gasCost = gasUsed * gasPricePaid;
       const gasFormatted = parseFloat(ethers.formatEther(gasCost)).toFixed(6);
       const nativeSymbol = networkName === 'polygon' ? 'POL' : 'BNB';
+      
       logger.success(`[${networkName}] 🎊 Sucesso! (Gas: ${gasFormatted} ${nativeSymbol})`);
       telegram.getInstance()?.sendMessage(`<b>✅ Sucesso (${networkName.toUpperCase()})</b>\n<b>Token:</b> ${tokenConfig.symbol}\n<b>Gas:</b> ${gasFormatted} ${nativeSymbol}\n<a href="${explorer.getExplorerLink(networkName, tx.hash)}">Ver no Explorer</a>`);
+      
+      return { ...receipt, status: 1, hash: tx.hash, gasFormatted };
     } else {
       logger.error(`[${networkName}] Falha na transação.`);
       telegram.getInstance()?.sendMessage(`<b>❌ Falha (${networkName.toUpperCase()})</b>\n<b>Token:</b> ${tokenConfig.symbol}\nTransação falhou na blockchain.`);
+      return { status: 0, hash: tx.hash };
     }
 
   } catch (error) {
     logger.error(`Erro no ${tokenConfig.symbol}: ${error.message}`);
+    return { status: 0, error: error.message };
   }
 }
 
+
+/**
+ * Fetches and displays balances for native and configured tokens on a network.
+ * @param {string} networkName - Network name.
+ * @returns {Promise<void>}
+ */
 async function getBalances(networkName) {
   const wallet = wallets[networkName];
   if (!wallet) return;

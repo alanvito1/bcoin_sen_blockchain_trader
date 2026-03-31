@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String         @id @default(uuid())
+  telegramId            BigInt         @unique
+  username              String?
+  credits               Int            @default(0)
+  subscriptionExpiresAt DateTime?
+  isActive              Boolean        @default(true)
+  stripeCustomerId      String?        @unique
+  hasAcceptedTerms      Boolean        @default(false)
+  
+  // Referral System
+  referralCode          String?        @unique
+  referredById          String?
+  referredBy            User?          @relation("Referral", fields: [referredById], references: [id])
+  referrals             User[]         @relation("Referral")
+  referralBalanceUSDT   Float          @default(0.0) 
+  referralBalanceBCOIN  Float          @default(0.0) 
+  referralBalanceSEN    Float          @default(0.0) 
+  referralPayoutAddress String?        // Secured external address to receive payouts
+  
+  // Notification Preferences
+  notifyTrades          Boolean        @default(true)
+  notifyBalances        Boolean        @default(true)
+  notifySteps           Boolean        @default(false)
+  
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  wallet                Wallet?
+  tradeConfigs          TradeConfig[]
+  tradeHistory          TradeHistory[]
+}
+
+
+model Wallet {
+  id                  String @id @default(uuid())
+  user                User   @relation(fields: [userId], references: [id])
+  userId              String @unique
+  publicAddress       String
+  encryptedPrivateKey String
+  iv                  String
+  authTag             String
+  network             String @default("POLYGON")
+
+  @@index([publicAddress])
+}
+
+model TradeConfig {
+  id             String  @id @default(uuid())
+  user           User    @relation(fields: [userId], references: [id])
+  userId         String
+  network        String  @default("BSC")
+  tokenPair      String
+  buyAmountA     Float   @default(10.0)
+  sellAmountA    Float   @default(5.0)
+  buyAmountB     Float   @default(4.0)
+  sellAmountB    Float   @default(1.0)
+  slippage       Float   @default(1.0)
+  strategy30m    Boolean @default(true)
+  strategy4h     Boolean @default(true)
+  maPeriodA      Int     @default(21)
+  maPeriodB      Int     @default(21)
+  timeframeA     String  @default("30m")
+  timeframeB     String  @default("4h")
+  rsiEnabled     Boolean @default(false)
+  rsiPeriod      Int     @default(14)
+  window1Min     Int     @default(15)
+  window1Max     Int     @default(29)
+  window2Min     Int     @default(45)
+  window2Max     Int     @default(59)
+  scheduleMode   String  @default("window")   // "window" | "interval"
+  intervalMinutes Int    @default(60)           // used when scheduleMode = "interval"
+  isOperating    Boolean @default(false)
+
+  @@unique([userId, network, tokenPair])
+}
+
+
+model TradeHistory {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  txHash       String?
+  type         String // Enum: BUY, SELL (Prisma doesn't enforce as string here but we can use enums if preferred)
+  status       String // Enum: PENDING, SUCCESS, FAILED
+  amount       Float
+  price        Float
+  feeUsed      Float
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([status])
+}

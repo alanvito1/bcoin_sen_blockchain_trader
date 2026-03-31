@@ -1,3 +1,11 @@
+/**
+ * @file scheduler.js
+ * @description Discipline Service: Manages randomized trading windows and execution cycles.
+ * Ensures trades only happen within specific timeframes (e.g., min 15-29 and 45-59) 
+ * to mimic human-like behavior and maintain strategy discipline.
+ * @module services/scheduler
+ */
+
 const config = require('../config');
 const swapper = require('./swapper');
 const indicator = require('./indicator');
@@ -9,10 +17,20 @@ let targetMin2 = -1;
 let lastHour = -1;
 let isPerformingSales = false;
 
+/**
+ * Generates a random integer between min and max (inclusive).
+ * @param {number} min - Minimum value.
+ * @param {number} max - Maximum value.
+ * @returns {number} Random integer.
+ */
 function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/**
+ * Randomizes the execution minutes for the current hour based on config windows.
+ * Sets targetMin1 and targetMin2.
+ */
 function resetSchedule() {
   const w1 = config.scheduler.window1;
   const w2 = config.scheduler.window2;
@@ -21,6 +39,11 @@ function resetSchedule() {
   logger.info(`[Scheduler] Próximas janelas: ${logger.colors.cyan}${targetMin1}${logger.colors.reset} e ${logger.colors.cyan}${targetMin2}${logger.colors.reset} (minutos da hora)`);
 }
 
+/**
+ * Main loop function checked every 30 seconds.
+ * Triggers performance of trades when the randomized minute is reached.
+ * @returns {Promise<void>}
+ */
 async function checkAndSell() {
   // Prevent re-entrancy if a sale is already in progress
   if (isPerformingSales) return;
@@ -36,7 +59,7 @@ async function checkAndSell() {
       lastHour = hour;
     }
 
-    // Window 1 trigger
+    // Window 1 trigger: If current minute matches randomized target
     if (minutes === targetMin1 && targetMin1 !== -1) {
       logger.success(`Horário sorteado atingido (${minutes} min). Iniciando operations da Janela 1...`);
       targetMin1 = -1;
@@ -48,7 +71,7 @@ async function checkAndSell() {
       }
     }
 
-    // Window 2 trigger
+    // Window 2 trigger: If current minute matches randomized target
     if (minutes === targetMin2 && targetMin2 !== -1) {
       logger.success(`Horário sorteado atingido (${minutes} min). Iniciando operations da Janela 2...`);
       targetMin2 = -1;
@@ -60,7 +83,7 @@ async function checkAndSell() {
       }
     }
     
-    // Status Log (every 5 minutes or so)
+    // Status Log (every 5 minutes)
     if (now.getSeconds() < 30 && minutes % 5 === 0) {
       const next = targetMin1 !== -1 ? targetMin1 : targetMin2;
       if (next !== -1) {
@@ -72,6 +95,11 @@ async function checkAndSell() {
   }
 }
 
+/**
+ * Iterates through all configured networks and tokens to verify trade conditions.
+ * Consolidates decisions from multiple strategies (MA, Grid) before execution.
+ * @returns {Promise<void>}
+ */
 async function performAllTrades() {
   const modeStr = config.strategy.dryRun ? `${logger.colors.yellow}DRY RUN${logger.colors.reset}` : `${logger.colors.red}LIVE${logger.colors.reset}`;
   console.log(`\n${logger.colors.cyan}================================================================${logger.colors.reset}`);
@@ -93,7 +121,7 @@ async function performAllTrades() {
 
         const decisions = [];
 
-        // --- STRATEGY A (30m MA21 - Grid/Reversal) ---
+        // --- STRATEGY A (e.g. 30m MA21) ---
         if (config.strategy.strategyA.enabled) {
           const sA = config.strategy.strategyA;
           const isTokenEnabled = sA.tokens[token.symbol] !== false;
@@ -125,10 +153,9 @@ async function performAllTrades() {
           }
         }
 
-        // Small delay between indicator fetches (randomized between 2-3s)
         await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
-        // --- STRATEGY B (4h MA21 - Grid/Reversal) ---
+        // --- STRATEGY B (e.g. 4h MA21) ---
         if (config.strategy.strategyB.enabled) {
           const sB = config.strategy.strategyB;
           const isTokenEnabled = sB.tokens[token.symbol] !== false;
@@ -160,7 +187,7 @@ async function performAllTrades() {
           }
         }
 
-        // --- Consolidate Decisions to avoid duplicate orders ---
+        // --- Consolidate Decisions ---
         if (decisions.length > 0) {
           let finalDecision = null;
 
@@ -187,7 +214,6 @@ async function performAllTrades() {
           }
         }
 
-        // Small delay between tokens (randomized between 1.5-2.5s)
         await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
 
       } catch (error) {
@@ -195,7 +221,7 @@ async function performAllTrades() {
       }
     }
 
-    // --- USDT Check ---
+    // --- USDT Check (Auto-buy GAS if needed) ---
     const usdtToken = network.tokens.find(t => t.symbol === 'USDT');
     if (usdtToken) {
       console.log(`\n${logger.colors.gray}--- Verificando Gas (USDT ➔ Native) ---${logger.colors.reset}`);
@@ -216,6 +242,10 @@ async function performAllTrades() {
   console.log(`${logger.colors.cyan}================================================================${logger.colors.reset}\n`);
 }
 
+/**
+ * Initializes the scheduler bot.
+ * Sets the randomization loop and runs the first check immediately.
+ */
 function start() {
   console.log('--- Blockchain Auto-Trader ---');
   console.log('Wallet loaded successfully.');
@@ -232,14 +262,11 @@ function start() {
   console.log('--------------------------\n');
 
   console.log('Bot initialized. Monitoring schedule (randomized mode)...');
-  // resetSchedule(); // This function is not defined in the provided context.
-  // Initialize lastHour to prevent redundant randomization on the first check
-  lastHour = new Date().getHours();
   
-  // Initial randomization
+  lastHour = new Date().getHours();
   resetSchedule();
   
-  // Check every 30 seconds
+  // Check every 30 seconds for randomized minute match
   setInterval(() => {
     checkAndSell().catch(err => {
       logger.error(`[Scheduler] Unhandled error in interval: ${err.message}`);
