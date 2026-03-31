@@ -63,10 +63,10 @@ npm start
 
 Para uma imersão técnica profunda, explore os seguintes manuais:
 
--   [🗺️ SYSTEM_ATLAS.md](file:///c:/Projetos/blockchain-trader/SYSTEM_ATLAS.md): Inventário completo de serviços, tabelas e fluxos.
--   [🏗️ ARCHITECTURE.md](file:///c:/Projetos/blockchain-trader/ARCHITECTURE.md): Diagramas técnicos de sequência, ERD e Segurança.
--   [🛠️ USAGE_GUIDE.md](file:///c:/Projetos/blockchain-trader/USAGE_GUIDE.md): Manual do usuário final e menus do bot.
--   [🔎 SCRIBE_JOURNAL.md](file:///c:/Projetos/blockchain-trader/SCRIBE_JOURNAL.md): GAP Analysis e dívidas técnicas mapeadas.
+-   [🗺️ SYSTEM_ATLAS.md](file:///c:/Projetos/blockchain-trader/docs/SYSTEM_ATLAS.md): Inventário completo de serviços, tabelas e fluxos.
+-   [🏗️ ARCHITECTURE.md](file:///c:/Projetos/blockchain-trader/docs/ARCHITECTURE.md): Diagramas técnicos de sequência, ERD e Segurança.
+-   [🛠️ USAGE_GUIDE.md](file:///c:/Projetos/blockchain-trader/docs/USAGE_GUIDE.md): Manual do usuário final e menus do bot.
+-   [🔎 SCRIBE_JOURNAL.md](file:///c:/Projetos/blockchain-trader/docs/SCRIBE_JOURNAL.md): GAP Analysis e dívidas técnicas mapeadas.
 
 ---
 
