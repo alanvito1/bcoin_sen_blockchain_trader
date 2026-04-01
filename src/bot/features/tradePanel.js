@@ -180,10 +180,6 @@ async function engineConfigHandler(ctx, network, token) {
     });
   }
 
-  if (!ctx.session.selectedEngineId) {
-    await ctx.answerCbQuery('⚠️ Sessão expirada. Por favor, selecione o motor novamente.', { show_alert: true });
-    return tradePanelHandler(ctx);
-  }
   ctx.session.selectedEngineId = config.id;
 
   const tfA = normalizeTF(config.timeframeA || '30m');
