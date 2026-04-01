@@ -564,8 +564,22 @@ async function startBotHandler(ctx) {
     include: { user: { include: { wallet: true } } },
   });
   if (!config.user.wallet) return ctx.answerCbQuery('❌ Configure uma carteira primeiro!', { show_alert: true });
-  const balances = await balanceService.checkBalances(config.user.wallet.publicAddress, config.network);
-  if (!balances.hasEnoughGas) return ctx.answerCbQuery('❌ Saldo insuficiente para Gás!', { show_alert: true });
+
+  // Balance check with graceful RPC error handling
+  try {
+    const balances = await balanceService.checkBalances(config.user.wallet.publicAddress, config.network);
+    if (!balances.hasEnoughGas) return ctx.answerCbQuery('❌ Saldo insuficiente para Gás!', { show_alert: true });
+  } catch (err) {
+    const isRpcError = err.message?.includes('quorum') || err.shortMessage?.includes('quorum') || err.code === 'SERVER_ERROR';
+    if (isRpcError) {
+      logger.error(`[TradePanel] RPC error during balance check: ${err.shortMessage || err.message}`);
+      // Start anyway — RPC issue is transient, scanner will handle balance on execution
+      await ctx.answerCbQuery('⚠️ RPC instável, mas motor será iniciado. Saldo verificado na execução.', { show_alert: true });
+    } else {
+      logger.error(`[TradePanel] Balance check error:`, err);
+      return ctx.answerCbQuery('❌ Erro ao verificar saldo. Tente novamente em instantes.', { show_alert: true });
+    }
+  }
 
   await prisma.tradeConfig.update({ where: { id: config.id }, data: { isOperating: true } });
   await ctx.answerCbQuery('🚀 Motor iniciado!');

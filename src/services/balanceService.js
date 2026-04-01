@@ -21,57 +21,85 @@ const ERC20_ABI = [
 
 /**
  * Checks native and token balances. Pauses bot if gas is insufficient.
+ * Includes retry logic and single-RPC fallback to handle FallbackProvider failures.
  */
 async function checkBalances(publicAddress, network, tokenAddress = null) {
-  const provider = providers[network.toLowerCase()];
-  if (!provider) throw new Error(`Provider para ${network} não encontrado.`);
+  const MAX_RETRIES = 2;
+  let lastError = null;
 
-  
-  // 1. Check Native Gas Balance
-  const nativeBalanceWei = await provider.getBalance(publicAddress);
-  const nativeBalance = parseFloat(formatUnits(nativeBalanceWei, 18));
-  
-  const hasEnoughGas = nativeBalance >= GAS_THRESHOLDS[network];
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      let provider = providers[network.toLowerCase()];
+      
+      // On final retry, use a direct single-RPC provider as fallback
+      if (attempt === MAX_RETRIES && provider) {
+        const config = require('../config');
+        const netConfig = config.networks[network.toLowerCase()];
+        const fallbackRpc = netConfig.rpc.split(',')[0].trim();
+        provider = new JsonRpcProvider(fallbackRpc, { chainId: netConfig.chainId, name: network.toLowerCase() }, { staticNetwork: true });
+        console.log(`[BalanceService] Using fallback single-RPC for ${network}: ${fallbackRpc}`);
+      }
 
-  let tokenBalance = 0;
-  let tokenSymbol = 'N/A';
+      if (!provider) throw new Error(`Provider para ${network} não encontrado.`);
 
-  // 2. Check Token Balance if provided
-  if (tokenAddress) {
-    const tokenContract = new Contract(tokenAddress, ERC20_ABI, provider);
-    const [balanceWei, decimals, symbol] = await Promise.all([
-      tokenContract.balanceOf(publicAddress),
-      tokenContract.decimals(),
-      tokenContract.symbol()
-    ]);
-    tokenBalance = formatUnits(balanceWei, decimals);
-    tokenSymbol = symbol;
-  }
+      // 1. Check Native Gas Balance
+      const nativeBalanceWei = await provider.getBalance(publicAddress);
+      const nativeBalance = parseFloat(formatUnits(nativeBalanceWei, 18));
+      
+      const hasEnoughGas = nativeBalance >= GAS_THRESHOLDS[network];
 
-  // 3. Auto-Pause Logic
-  if (!hasEnoughGas) {
-    const userWallet = await prisma.wallet.findFirst({ where: { publicAddress } });
-    if (userWallet) {
-      await prisma.tradeConfig.updateMany({
-        where: { userId: userWallet.userId },
-        data: { isOperating: false }
-      });
+      let tokenBalance = 0;
+      let tokenSymbol = 'N/A';
 
-      // Notify User via Queue
-      const gasUnit = network === 'POLYGON' ? 'MATIC' : 'BNB';
-      await notificationQueue.add('pauseNotification', {
-        userId: userWallet.userId,
-        message: `🚨 Seu bot foi pausado por falta de saldo para taxas (${nativeBalance} ${gasUnit} < ${GAS_THRESHOLDS[network]} ${gasUnit}). Recarregue sua carteira.`
-      });
+      // 2. Check Token Balance if provided
+      if (tokenAddress) {
+        const tokenContract = new Contract(tokenAddress, ERC20_ABI, provider);
+        const [balanceWei, decimals, symbol] = await Promise.all([
+          tokenContract.balanceOf(publicAddress),
+          tokenContract.decimals(),
+          tokenContract.symbol()
+        ]);
+        tokenBalance = formatUnits(balanceWei, decimals);
+        tokenSymbol = symbol;
+      }
+
+      // 3. Auto-Pause Logic
+      if (!hasEnoughGas) {
+        const userWallet = await prisma.wallet.findFirst({ where: { publicAddress } });
+        if (userWallet) {
+          await prisma.tradeConfig.updateMany({
+            where: { userId: userWallet.userId },
+            data: { isOperating: false }
+          });
+
+          // Notify User via Queue
+          const gasUnit = network === 'POLYGON' ? 'MATIC' : 'BNB';
+          await notificationQueue.add('pauseNotification', {
+            userId: userWallet.userId,
+            message: `🚨 Seu bot foi pausado por falta de saldo para taxas (${nativeBalance} ${gasUnit} < ${GAS_THRESHOLDS[network]} ${gasUnit}). Recarregue sua carteira.`
+          });
+        }
+      }
+
+      return {
+        nativeBalance,
+        hasEnoughGas,
+        tokenBalance,
+        tokenSymbol
+      };
+    } catch (error) {
+      lastError = error;
+      const isQuorumError = error.message?.includes('quorum') || error.shortMessage?.includes('quorum');
+      console.error(`[BalanceService] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed for ${network}:`, 
+        isQuorumError ? 'quorum not met (retrying...)' : error.message);
+      
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
     }
   }
 
-  return {
-    nativeBalance,
-    hasEnoughGas,
-    tokenBalance,
-    tokenSymbol
-  };
+  throw lastError;
 }
 
 /**
