@@ -39,6 +39,11 @@ model User {
   tradeHistory          TradeHistory[]
 }
 
+model Session {
+  id    String @id @default(uuid())
+  key   String @unique // "userId:chatId"
+  data  String // JSON string
+}
 
 model Wallet {
   id                  String @id @default(uuid())

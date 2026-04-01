@@ -63,7 +63,12 @@ const stage = new Scenes.Stage([
 ]);
 
 
-bot.use(session());
+const sessionStore = require('./sessionStore');
+bot.use(session({
+  property: 'session',
+  getSessionKey: (ctx) => ctx.from && ctx.chat && `${ctx.from.id}:${ctx.chat.id}`,
+  store: sessionStore
+}));
 bot.use(stage.middleware());
 
 // 2. Commands

@@ -180,6 +180,10 @@ async function engineConfigHandler(ctx, network, token) {
     });
   }
 
+  if (!ctx.session.selectedEngineId) {
+    await ctx.answerCbQuery('⚠️ Sessão expirada. Por favor, selecione o motor novamente.', { show_alert: true });
+    return tradePanelHandler(ctx);
+  }
   ctx.session.selectedEngineId = config.id;
 
   const tfA = normalizeTF(config.timeframeA || '30m');
@@ -549,10 +553,16 @@ async function setPairHandler(ctx, pair) {
   return setupPairMenu(ctx);
 }
 
+const { sendUserNotification } = require('../notifier');
+
 // ---------------------------------------------------------------------------
 // Start / Stop
 // ---------------------------------------------------------------------------
 async function startBotHandler(ctx) {
+  if (!ctx.session.selectedEngineId) {
+    await ctx.answerCbQuery('⚠️ Sessão expirada. Por favor, selecione o motor novamente.', { show_alert: true });
+    return tradePanelHandler(ctx);
+  }
   const config = await prisma.tradeConfig.findUnique({
     where: { id: ctx.session.selectedEngineId },
     include: { user: { include: { wallet: true } } },
@@ -563,6 +573,10 @@ async function startBotHandler(ctx) {
 
   await prisma.tradeConfig.update({ where: { id: config.id }, data: { isOperating: true } });
   await ctx.answerCbQuery('🚀 Motor iniciado!');
+  
+  // Notification to chat
+  await sendUserNotification(ctx.from.id, `🚀 <b>Motor Ligado:</b> ${config.network} - ${config.tokenPair}\nEstratégia: ${config.strategy30m ? 'A' : ''}${config.strategy30m && config.strategy4h ? ' + ' : ''}${config.strategy4h ? 'B' : ''}`, 'success', 'TRADE');
+  
   return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
 }
 
