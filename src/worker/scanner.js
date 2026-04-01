@@ -11,27 +11,22 @@ const scannerTask = cron.schedule('* * * * *', async () => {
   const currentMinute = now.getMinutes();
   logger.info(`[Scanner] Running scan for minute: ${currentMinute}`);
 
+  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID 
+    ? BigInt(process.env.ADMIN_TELEGRAM_ID) 
+    : (process.env.TELEGRAM_CHAT_ID ? BigInt(process.env.TELEGRAM_CHAT_ID) : null);
+
   try {
-    // 1. Find eligible users (Active, with Wallet, and Credits/Subscription)
+    // 1. Find eligible users (Active, with Wallet)
+    // Credits/Subscription gate is now conditional (bypassed for ADMIN)
     const eligibleConfigs = await prisma.tradeConfig.findMany({
       where: {
         isOperating: true,
         user: {
           isActive: true,
           wallet: {
-            id: { not: undefined } // More robust check for existence
-          },
-          OR: [
-            { credits: { gt: 0 } },
-            { subscriptionExpiresAt: { gt: now } }
-          ]
-        },
-        OR: [
-          { window1Min: currentMinute },
-          { window1Max: currentMinute },
-          { window2Min: currentMinute },
-          { window2Max: currentMinute }
-        ]
+            id: { not: undefined }
+          }
+        }
       },
       include: {
         user: {
@@ -40,18 +35,42 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       }
     });
 
-    if (eligibleConfigs.length > 0) {
-      logger.info(`[Scanner] Found ${eligibleConfigs.length} users with scheduled window for minute: ${currentMinute}`);
+    // 2. Filter by Credits/Subscription and Schedule
+    const filteredConfigs = eligibleConfigs.filter(config => {
+      const { user } = config;
+      
+      // Gate A: Credits/Subscription (Bypass for ADMIN)
+      const isSubscribed = user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
+      const possessesCredits = user.credits > 0;
+      const isAdmin = adminTelegramId && user.telegramId === adminTelegramId;
+      
+      if (!isAdmin && !isSubscribed && !possessesCredits) {
+        return false;
+      }
+
+      // Gate B: Schedule
+      if (config.scheduleMode === 'interval') {
+        return currentMinute % config.intervalMinutes === 0;
+      } else {
+        // Window Mode (Default)
+        return [
+          config.window1Min, config.window1Max, 
+          config.window2Min, config.window2Max
+        ].includes(currentMinute);
+      }
+    });
+
+    if (filteredConfigs.length > 0) {
+      logger.info(`[Scanner] Found ${filteredConfigs.length} users with scheduled trigger for minute: ${currentMinute}`);
     } else {
-      // Optional: Log if any active config exists but failed other filters
       const totalOperating = await prisma.tradeConfig.count({ where: { isOperating: true } });
       if (totalOperating > 0) {
         logger.info(`[Scanner] Scan finished. ${totalOperating} active bots exist, but none scheduled or eligible for this minute.`);
       }
     }
 
-    // 2. Dispatch jobs to tradeQueue
-    for (const config of eligibleConfigs) {
+    // 3. Dispatch jobs to tradeQueue
+    for (const config of filteredConfigs) {
       await tradeQueue.add('executeTrade', {
         userId: config.userId,
         tradeConfigId: config.id,
