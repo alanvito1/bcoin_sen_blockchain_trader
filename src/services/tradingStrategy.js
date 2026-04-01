@@ -81,13 +81,56 @@ async function fetchWithRetry(url, retries = 5, backoff = 2000) {
 }
 
 /**
- * Fetches OHLCV data from GeckoTerminal and handles interval aggregation/sampling.
+ * Fetches OHLCV data. Now primarily reads from the local Database (Phase 3 Scalability)
+ * with a fallback to API if DB data is stale or insufficient.
  * @param {string} symbol - Token pair symbol (e.g., 'BCOINUSDT').
  * @param {string} interval - Desired timeframe (15, 30, 1h, 4h).
  * @param {number} [limit=100] - Number of candles to retrieve.
  * @returns {Promise<Array<Object>>} Normalized candle array [{close, time}].
  */
 async function fetchCandles(symbol, interval, limit = 100) {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const tokenPair = symbol === 'BCOINUSDT' ? 'BCOIN/USDT' : 'SEN/USDT';
+    const network = symbol === 'SENUSDT' ? 'POLYGON' : 'BSC'; // Simple heuristic for our core coins
+
+    // 1. Try DB First (Ticks are 1m)
+    try {
+        const minutesNeeded = parseInt(interval) || 60;
+        const totalMinutes = minutesNeeded * limit;
+        
+        const ticks = await prisma.priceTick.findMany({
+            where: { symbol: tokenPair, network },
+            orderBy: { timestamp: 'desc' },
+            take: totalMinutes
+        });
+
+        if (ticks.length >= limit) {
+            // Aggregate ticks into candles
+            const candles = [];
+            for (let i = 0; i < ticks.length; i += minutesNeeded) {
+                const group = ticks.slice(i, i + minutesNeeded);
+                if (group.length > 0) {
+                    candles.push({
+                        close: group[0].price, // Latest price in the interval
+                        time: group[0].timestamp.getTime() / 1000
+                    });
+                }
+            }
+            // Check if DB data is too old (> 10 mins)
+            const latestTick = ticks[0].timestamp;
+            if ((Date.now() - latestTick.getTime()) < 1000 * 60 * 10) {
+                console.log(`[Strategy] Using DB Data for ${symbol} (${candles.length} candles aggregated from ${ticks.length} ticks)`);
+                return candles.reverse();
+            }
+        }
+        console.log(`[Strategy] DB Data for ${symbol} stale or insufficient. Falling back to API...`);
+    } catch (dbErr) {
+        console.error(`[Strategy] DB Error fetching ticks: ${dbErr.message}`);
+    }
+
+    // 2. Fallback to GeckoTerminal API (Original Logic)
     const poolMap = {
         'BCOINUSDT': { network: 'bsc', addr: '0x2eebe0c34da9ba65521e98cbaa7d97496d05f489' },
         'SENUSDT': { network: 'polygon', addr: '0xd6c2de543dd1570315cc0bebcdaea522553b7e2b' }
@@ -153,10 +196,10 @@ async function getSignal(tokenPair, tradeConfig) {
     const lastPrice = candlesA[candlesA.length - 1].close;
     const prevPrice = candlesA[candlesA.length - 2].close;
 
-    console.log(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(30m): ${maA?.toFixed(6)} | 📈 MA(4h): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'OFF'}`);
+    console.log(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(30m): ${maA?.toFixed(6)} | 📈 MA(4h): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED (Bypassing filter)'}`);
 
     let signal = 'HOLD';
-    let reason = 'Sem gatilho no momento.';
+    let reason = 'Análise técnica concluída: Sem sinal claro de compra/venda.';
     let strategyUsed = null;
 
     const trendUp = lastPrice > maB;

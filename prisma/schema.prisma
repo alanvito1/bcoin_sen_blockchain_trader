@@ -105,3 +105,13 @@ model TradeHistory {
   @@index([userId, createdAt])
   @@index([status])
 }
+
+model PriceTick {
+  id        String   @id @default(uuid())
+  symbol    String   // e.g. "BCOIN/USDT"
+  network   String   // "BSC" or "POLYGON"
+  price     Float
+  timestamp DateTime @default(now())
+
+  @@index([symbol, network, timestamp])
+}

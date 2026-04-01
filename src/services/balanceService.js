@@ -1,13 +1,7 @@
-const { JsonRpcProvider, formatUnits, Contract } = require('ethers');
+const { formatUnits, Contract, JsonRpcProvider } = require('ethers');
 const prisma = require('../config/prisma');
 const { notificationQueue } = require('../config/queue');
-
 const { providers } = require('./blockchain');
-
-// In-memory cache for balances
-const { formatUnits, Contract, JsonRpcProvider } = require('ethers');
-const prisma = require('../db');
-const { notificationQueue } = require('../worker/queues');
 const logger = require('../utils/logger');
 
 const ERC20_ABI = [
@@ -17,8 +11,8 @@ const ERC20_ABI = [
 ];
 
 const GAS_THRESHOLDS = {
-  BSC: 0.005,      // 0.005 BNB
-  POLYGON: 0.5     // 0.5 MATIC
+  BSC: 0.001,      // 0.001 BNB
+  POLYGON: 0.1     // 0.1 MATIC
 };
 
 // Eternal Cache (Self-Regenerating)
@@ -128,8 +122,8 @@ async function checkBalances(publicAddress, network, tokenAddress = null) {
  * Checks native and token balances for both supported networks.
  */
 async function getMultiChainBalances(publicAddress) {
-  const cacheKey = publicAddress.toLowerCase();
-  const cached = BALANCE_CACHE.get(cacheKey);
+  const cacheKey = `multi-${publicAddress.toLowerCase()}`;
+  const cached = balanceCache.get(cacheKey);
   
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     return cached.data;
@@ -152,7 +146,7 @@ async function getMultiChainBalances(publicAddress) {
 
       // 2. Token Balances (USDT, SEN, BCOIN)
       const tokensToCheck = [
-        { name: 'USDT', address: netConfig.usdt, decimals: 18 }, // Most USDT on Poly/BSC are 18, but worth checking
+        { name: 'USDT', address: netConfig.usdt, decimals: 18 },
         ...netConfig.tokens
       ];
 
@@ -162,8 +156,7 @@ async function getMultiChainBalances(publicAddress) {
         try {
           const tokenContract = new Contract(t.address, ERC20_ABI, provider);
           const balanceWei = await tokenContract.balanceOf(publicAddress);
-          // Standardizing to 18 decimals for these specific tokens in this bot
-          tokenBalances[t.name] = parseFloat(formatUnits(balanceWei, 18)).toFixed(2);
+          tokenBalances[t.name] = parseFloat(formatUnits(balanceWei, t.decimals || 18)).toFixed(2);
         } catch (e) {
           tokenBalances[t.name] = '0.00';
         }
@@ -192,7 +185,7 @@ async function getMultiChainBalances(publicAddress) {
     if (res.status === 'fulfilled') {
       const { network, data, error } = res.value;
       if (error) {
-        console.error(`[BalanceService] Error for ${network}:`, error);
+        logger.error(`[BalanceService] Error for ${network}: ${error}`);
         results[network] = null;
       } else {
         results[network] = data;
@@ -200,11 +193,13 @@ async function getMultiChainBalances(publicAddress) {
     }
   });
 
-  // Update Cache
-  BALANCE_CACHE.set(cacheKey, {
+  const finalResult = {
     timestamp: Date.now(),
     data: results
-  });
+  };
+
+  // Update Cache
+  balanceCache.set(cacheKey, finalResult);
 
   return results;
 }

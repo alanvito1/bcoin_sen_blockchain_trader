@@ -76,10 +76,18 @@ async function processTradeJob(job) {
       return console.log(`[TradeExecutor] User ${userId} or config not available/active.`);
     }
 
+    const verbose = user.notifySteps;
+
     // 2. Strategy Check
-    await sendUserNotification(user.telegramId, `🔍 <b>Passo 1/4:</b> Analisando indicadores para <code>${config.tokenPair}</code>...`, 'info', 'STEP');
+    if (verbose) {
+      await sendUserNotification(user.telegramId, `🔍 <b>Passo 1/4:</b> Analisando indicadores para <code>${config.tokenPair}</code>...`, 'info', 'STEP');
+    }
+    
     const result = await strategy.getSignal(config.tokenPair, config);
     if (result.signal === 'HOLD') {
+      if (verbose) {
+        await sendUserNotification(user.telegramId, `📊 <b>Status:</b> Ciclo concluído. Recomendação: <b>HOLD</b> (Aguardar).\n<i>Motivo: ${result.reason}</i>`, 'info', 'STEP');
+      }
       return console.log(`[TradeExecutor] Signal: HOLD for ${userId}. Reason: ${result.reason}`);
     }
 
@@ -113,7 +121,9 @@ async function processTradeJob(job) {
     
     // 5. Pre-trade Balance Check
     const isDryRun = process.env.DRY_RUN === 'true';
-    await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '💰 '}<b>Passo 2/4:</b> Verificando saldo e taxas na rede <code>${config.network}</code>...`, 'info', 'STEP');
+    if (verbose) {
+      await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '💰 '}<b>Passo 2/4:</b> Verificando saldo e taxas na rede <code>${config.network}</code>...`, 'info', 'STEP');
+    }
     
     if (isDryRun) {
       console.log(`[TradeExecutor] DRY RUN ENABLED. Skipping real balance check for ${userId}.`);
@@ -133,7 +143,9 @@ async function processTradeJob(job) {
     }
 
     // 6. Execute Swap (Real execution with Routing & Anti-Sandwich)
-    await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '🚀 '}<b>Passo 3/4:</b> ${isDryRun ? 'Simulando envio de transação...' : 'Enviando transação de ' + result.signal + ' para a pool...'}`, 'info', 'STEP');
+    if (verbose) {
+      await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '🚀 '}<b>Passo 3/4:</b> ${isDryRun ? 'Simulando envio de transação...' : 'Enviando transação de ' + result.signal + ' para a pool...'}`, 'info', 'STEP');
+    }
     
     let txHash;
     let gasUsed = '0.001';

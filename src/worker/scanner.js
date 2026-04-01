@@ -52,11 +52,10 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       if (config.scheduleMode === 'interval') {
         return currentMinute % config.intervalMinutes === 0;
       } else {
-        // Window Mode (Default)
-        return [
-          config.window1Min, config.window1Max, 
-          config.window2Min, config.window2Max
-        ].includes(currentMinute);
+        // Window Mode (Default: runs every minute between Min and Max)
+        const inWindow1 = currentMinute >= (config.window1Min || 0) && currentMinute <= (config.window1Max || 0);
+        const inWindow2 = currentMinute >= (config.window2Min || 0) && currentMinute <= (config.window2Max || 0);
+        return inWindow1 || inWindow2;
       }
     });
 

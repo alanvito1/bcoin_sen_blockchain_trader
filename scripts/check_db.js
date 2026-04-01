@@ -22,17 +22,14 @@ async function main() {
     }, null, 2));
   });
 
-  console.log('\n=== ALL USERS ===');
-  const users = await prisma.user.findMany({ include: { wallet: true } });
-  users.forEach(u => {
-    console.log(JSON.stringify({
-      id: u.id,
-      telegramId: u.telegramId.toString(),
-      isActive: u.isActive,
-      credits: u.credits,
-      hasWallet: !!u.wallet,
-      subscriptionExpiresAt: u.subscriptionExpiresAt
-    }));
+  console.log('\n=== MARKET DATA (PriceTick) ===');
+  const ticks = await prisma.priceTick.findMany({
+    orderBy: { timestamp: 'desc' },
+    take: 10
+  });
+  console.log(`Total Ticks In DB: ${await prisma.priceTick.count()}`);
+  ticks.forEach(t => {
+    console.log(`[${t.timestamp.toISOString()}] ${t.symbol} on ${t.network}: $${t.price.toFixed(6)}`);
   });
 
   process.exit(0);

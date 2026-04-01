@@ -3,6 +3,7 @@ const config = require('../config');
 
 const rpcHealth = {}; // { [url]: { failures: 0, lastFailure: 0 } }
 const BLACKLIST_DURATION = 1000 * 60 * 5; // 5 minutes
+const PERMANENT_BLACKLIST_DURATION = 1000 * 60 * 60 * 24; // 24 hours
 
 function createProvider(networkKey) {
   const netConfig = config.networks[networkKey];
@@ -16,8 +17,13 @@ function createProvider(networkKey) {
   const now = Date.now();
   const availableRpcs = allRpcs.filter(url => {
     const health = rpcHealth[url];
-    if (health && health.failures >= 3 && (now - health.lastFailure) < BLACKLIST_DURATION) {
-      return false;
+    if (health) {
+      if (health.permanent && (now - health.lastFailure) < PERMANENT_BLACKLIST_DURATION) {
+        return false;
+      }
+      if (health.failures >= 3 && (now - health.lastFailure) < BLACKLIST_DURATION) {
+        return false;
+      }
     }
     return true;
   });
@@ -40,7 +46,7 @@ function createProvider(networkKey) {
       try {
         const result = await originalPerform(req, params);
         // Successful request -> reset failures
-        if (!rpcHealth[url]) rpcHealth[url] = { failures: 0, lastFailure: 0 };
+        if (!rpcHealth[url]) rpcHealth[url] = { failures: 0, lastFailure: 0, permanent: false };
         rpcHealth[url].failures = 0;
         return result;
       } catch (error) {
@@ -48,9 +54,31 @@ function createProvider(networkKey) {
         rpcHealth[url].failures++;
         rpcHealth[url].lastFailure = Date.now();
         
-        const isCritical = error.message?.includes('bad data') || error.code === 'SERVER_ERROR' || error.code === 'NETWORK_ERROR';
-        if (isCritical) {
-          console.warn(`[ConnectivityEngine] RPC Fail: ${url} (Network: ${networkKey}). Error: ${error.shortMessage || error.message}`);
+        const errorMessage = error.message || '';
+        const isAuthError = errorMessage.includes('401') || 
+                           errorMessage.includes('Unauthorized') || 
+                           errorMessage.includes('API key');
+        
+        const isThrottled = errorMessage.includes('429') || 
+                           errorMessage.includes('too many requests') ||
+                           errorMessage.includes('rate limit');
+
+        const isBadRequest = errorMessage.includes('400') ||
+                            errorMessage.includes('bad request');
+
+        if (isAuthError) {
+          rpcHealth[url].permanent = true;
+          console.error(`[ConnectivityEngine] PERMANENT Blacklist: ${url} (Requires API Key)`);
+        } else if (isThrottled || isBadRequest) {
+          // Increase failure count aggressively for throttled or broken nodes
+          rpcHealth[url].failures += 5; 
+          rpcHealth[url].lastFailure = Date.now();
+          console.warn(`[ConnectivityEngine] RPC Throttled/Broken: ${url} (${errorMessage}). Rotating...`);
+        } else {
+          const isCritical = errorMessage.includes('bad data') || error.code === 'SERVER_ERROR' || error.code === 'NETWORK_ERROR';
+          if (isCritical) {
+            console.warn(`[ConnectivityEngine] RPC Fail: ${url} (Network: ${networkKey}). Error: ${error.shortMessage || errorMessage}`);
+          }
         }
         throw error;
       }

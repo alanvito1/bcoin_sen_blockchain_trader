@@ -19,6 +19,7 @@ const scanner = require('./src/worker/scanner');
 const tradeExecutor = require('./src/worker/tradeExecutor');
 const billingCron = require('./src/worker/billingCron');
 const { notificationWorker } = require('./src/worker/notificationWorker');
+const priceFetcher = require('./src/worker/priceFetcher'); // Phase 3: DB Scalability
 
 // Basic Health Check
 setInterval(async () => {
