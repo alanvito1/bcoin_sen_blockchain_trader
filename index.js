@@ -1,4 +1,8 @@
 require('dotenv').config();
+// BigInt JSON global patch (Prisma needs this)
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
 const prisma = require('./src/config/prisma');
 const logger = require('./src/utils/logger');
 

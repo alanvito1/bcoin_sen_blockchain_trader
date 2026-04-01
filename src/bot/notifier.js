@@ -34,7 +34,8 @@ async function sendUserNotification(telegramId, message, type = 'info', category
         data: { isActive: false }
       });
     } else {
-      console.error(`[Notifier] Failed to send message to ${telegramId}:`, error);
+        console.error(`[Notifier] Failed to send message to ${telegramId.toString()}. Reason: ${error.message || 'Unknown'}`);
+        if (error.response) console.error(`[Telegram API Error]:`, error.response);
     }
   }
 }

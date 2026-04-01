@@ -21,7 +21,10 @@ if (process.env.NODE_ENV !== 'production') {
     format: format.combine(
       format.colorize(),
       format.printf(({ timestamp, level, message, ...meta }) => {
-        return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
+        const metaStr = Object.keys(meta).length 
+          ? JSON.stringify(meta, (key, value) => typeof value === 'bigint' ? value.toString() : value) 
+          : '';
+        return `${timestamp} [${level}]: ${message} ${metaStr}`;
       })
     ),
   }));
