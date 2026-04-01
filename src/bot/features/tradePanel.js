@@ -565,19 +565,22 @@ async function startBotHandler(ctx) {
   });
   if (!config.user.wallet) return ctx.answerCbQuery('❌ Configure uma carteira primeiro!', { show_alert: true });
 
-  // Balance check with graceful RPC error handling
+  // Balance check with silent resilient handling
   try {
     const balances = await balanceService.checkBalances(config.user.wallet.publicAddress, config.network);
     if (!balances.hasEnoughGas) return ctx.answerCbQuery('❌ Saldo insuficiente para Gás!', { show_alert: true });
+    
+    if (balances.isCached) {
+      logger.info(`[TradePanel] Starting ${config.network} engine with CACHED balance data.`);
+    }
   } catch (err) {
-    const isRpcError = err.message?.includes('quorum') || err.shortMessage?.includes('quorum') || err.code === 'SERVER_ERROR';
+    const isRpcError = err.message?.includes('quorum') || err.message?.includes('bad data') || err.code === 'SERVER_ERROR';
     if (isRpcError) {
-      logger.error(`[TradePanel] RPC error during balance check: ${err.shortMessage || err.message}`);
-      // Start anyway — RPC issue is transient, scanner will handle balance on execution
-      await ctx.answerCbQuery('⚠️ RPC instável, mas motor será iniciado. Saldo verificado na execução.', { show_alert: true });
+      // SILENT RECOVERY: Start anyway if it's an RPC issue, the executor will manage balance
+      logger.error(`[TradePanel] Total RPC failure during start: ${err.message}. Starting in autonomous mode.`);
     } else {
-      logger.error(`[TradePanel] Balance check error:`, err);
-      return ctx.answerCbQuery('❌ Erro ao verificar saldo. Tente novamente em instantes.', { show_alert: true });
+      logger.error(`[TradePanel] Critical balance check error:`, err);
+      return ctx.answerCbQuery('❌ Erro crítico de sistema. Tente novamente.', { show_alert: true });
     }
   }
 

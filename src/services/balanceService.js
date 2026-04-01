@@ -5,25 +5,32 @@ const { notificationQueue } = require('../config/queue');
 const { providers } = require('./blockchain');
 
 // In-memory cache for balances
-const BALANCE_CACHE = new Map();
-const CACHE_TTL = 30000; // 30 seconds
-
-const GAS_THRESHOLDS = {
-  POLYGON: 0.05,
-  BSC: 0.002
-};
+const { formatUnits, Contract, JsonRpcProvider } = require('ethers');
+const prisma = require('../db');
+const { notificationQueue } = require('../worker/queues');
+const logger = require('../utils/logger');
 
 const ERC20_ABI = [
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)"
+  'function balanceOf(address owner) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)'
 ];
+
+const GAS_THRESHOLDS = {
+  BSC: 0.005,      // 0.005 BNB
+  POLYGON: 0.5     // 0.5 MATIC
+};
+
+// Eternal Cache (Self-Regenerating)
+const balanceCache = new Map(); // Key: `${address}-${network}-${token}`, Value: { data, timestamp }
+const CACHE_TTL = 1000 * 60 * 2; // 2 minutes max age for fallback
 
 /**
  * Checks native and token balances. Pauses bot if gas is insufficient.
- * Includes retry logic and single-RPC fallback to handle FallbackProvider failures.
+ * Includes retry logic, single-RPC fallback, and SWR caching for maximum resilience.
  */
 async function checkBalances(publicAddress, network, tokenAddress = null) {
+  const cacheKey = `${publicAddress}-${network}-${tokenAddress || 'native'}`;
   const MAX_RETRIES = 2;
   let lastError = null;
 
@@ -31,13 +38,15 @@ async function checkBalances(publicAddress, network, tokenAddress = null) {
     try {
       let provider = providers[network.toLowerCase()];
       
-      // On final retry, use a direct single-RPC provider as fallback
+      // On final retry, use a direct single-RPC provider as fallback (Emergency Recovery)
       if (attempt === MAX_RETRIES && provider) {
         const config = require('../config');
         const netConfig = config.networks[network.toLowerCase()];
-        const fallbackRpc = netConfig.rpc.split(',')[0].trim();
+        const rpcList = netConfig.rpc.split(',').map(r => r.trim()).filter(Boolean);
+        // Try the second one if the first failed, or just the first
+        const fallbackRpc = rpcList[1] || rpcList[0];
         provider = new JsonRpcProvider(fallbackRpc, { chainId: netConfig.chainId, name: network.toLowerCase() }, { staticNetwork: true });
-        console.log(`[BalanceService] Using fallback single-RPC for ${network}: ${fallbackRpc}`);
+        logger.info(`[BalanceService] Emergency: Using fallback single-RPC for ${network}: ${fallbackRpc}`);
       }
 
       if (!provider) throw new Error(`Provider para ${network} não encontrado.`);
@@ -46,7 +55,7 @@ async function checkBalances(publicAddress, network, tokenAddress = null) {
       const nativeBalanceWei = await provider.getBalance(publicAddress);
       const nativeBalance = parseFloat(formatUnits(nativeBalanceWei, 18));
       
-      const hasEnoughGas = nativeBalance >= GAS_THRESHOLDS[network];
+      const hasEnoughGas = nativeBalance >= GAS_THRESHOLDS[network.toUpperCase()];
 
       let tokenBalance = 0;
       let tokenSymbol = 'N/A';
@@ -63,6 +72,18 @@ async function checkBalances(publicAddress, network, tokenAddress = null) {
         tokenSymbol = symbol;
       }
 
+      const result = {
+        nativeBalance,
+        hasEnoughGas,
+        tokenBalance,
+        tokenSymbol,
+        isCached: false,
+        timestamp: Date.now()
+      };
+
+      // Update Cache
+      balanceCache.set(cacheKey, result);
+
       // 3. Auto-Pause Logic
       if (!hasEnoughGas) {
         const userWallet = await prisma.wallet.findFirst({ where: { publicAddress } });
@@ -72,31 +93,32 @@ async function checkBalances(publicAddress, network, tokenAddress = null) {
             data: { isOperating: false }
           });
 
-          // Notify User via Queue
           const gasUnit = network === 'POLYGON' ? 'MATIC' : 'BNB';
           await notificationQueue.add('pauseNotification', {
             userId: userWallet.userId,
-            message: `🚨 Seu bot foi pausado por falta de saldo para taxas (${nativeBalance} ${gasUnit} < ${GAS_THRESHOLDS[network]} ${gasUnit}). Recarregue sua carteira.`
+            message: `🚨 Seu bot foi pausado por falta de saldo para taxas (${nativeBalance} ${gasUnit} < ${GAS_THRESHOLDS[network.toUpperCase()]} ${gasUnit}). Recarregue sua carteira.`
           });
         }
       }
 
-      return {
-        nativeBalance,
-        hasEnoughGas,
-        tokenBalance,
-        tokenSymbol
-      };
+      return result;
     } catch (error) {
       lastError = error;
-      const isQuorumError = error.message?.includes('quorum') || error.shortMessage?.includes('quorum');
-      console.error(`[BalanceService] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed for ${network}:`, 
-        isQuorumError ? 'quorum not met (retrying...)' : error.message);
+      const isRpcError = error.message?.includes('quorum') || error.message?.includes('bad data') || error.code === 'SERVER_ERROR';
+      
+      logger.warn(`[BalanceService] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed for ${network}: ${isRpcError ? 'RPC issue' : error.message}`);
       
       if (attempt < MAX_RETRIES) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // Exponential backoff
       }
     }
+  }
+
+  // SELF-REGENERATION: If all attempts failed, try to use Cache as last resort
+  const cachedValue = balanceCache.get(cacheKey);
+  if (cachedValue && (Date.now() - cachedValue.timestamp) < CACHE_TTL) {
+    logger.info(`[BalanceService] Network failure. Recovering with cached balance for ${publicAddress} (${network})`);
+    return { ...cachedValue, isCached: true };
   }
 
   throw lastError;
