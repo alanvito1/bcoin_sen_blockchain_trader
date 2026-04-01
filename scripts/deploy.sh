@@ -1,20 +1,20 @@
 #!/bin/bash
+# 🚀 Deployment script for VPS
 
-# Blockchain Trader - Deploy Script
-# Best for VPS or Railway
+# Step 1: Update code
+echo "Pulling latest code from live-production branch..."
+git fetch origin
+git reset --hard origin/live-production
 
-echo "🚀 Starting Deployment..."
+# Step 2: Build and restart containers using production config
+echo "Restarting containers..."
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d --build
 
-# 1. Pull latest code
-# git pull origin main
+# Step 3: Run Prisma migrations (if any)
+# This Step is already in the docker-compose command, 
+# but we can call it manually to verify.
+# echo "Running Prisma migrations..."
+# docker exec trader-engine npx prisma migrate deploy
 
-# 2. Build and restart containers
-docker-compose up -d --build
-
-# 3. DB Migrations
-docker-compose exec bot npx prisma migrate deploy
-
-# 4. Cleanup
-docker image prune -f
-
-echo "✅ [SUCCESS] Application is online."
+echo "✅ Deployment successful! Run 'docker logs -f trader-engine' to monitor logs."

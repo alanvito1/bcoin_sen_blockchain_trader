@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  bot-engine:
+    build: .
+    container_name: trader-engine
+    restart: always
+    env_file:
+      - .env
+    command: sh -c "npx prisma migrate deploy && node index.js"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # Volumes are not strictly needed here as we use external DB/Redis, 
+  # but keeping the structure for future persistence needs (like file logs).
+  logdata:
