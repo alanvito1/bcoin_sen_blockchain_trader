@@ -57,7 +57,7 @@ module.exports = {
   networks: {
     bsc: {
       chainId: 56,
-      rpc: process.env.BSC_RPC || 'https://binance.llamarpc.com,https://bsc-dataseed.binance.org,https://bsc-dataseed1.defibit.io,https://bsc-dataseed1.ninicoin.io,https://1rpc.io/bsc,https://rpc.ankr.com/bsc',
+      rpc: process.env.BSC_RPC || 'https://bsc-dataseed.binance.org,https://bsc-dataseed1.defibit.io,https://bsc-dataseed1.ninicoin.io,https://1rpc.io/bsc,https://rpc.ankr.com/bsc,https://bsc.publicnode.com',
       router: '0x10ed43c718714eb63d5aa57b78b54704e256024e',
       wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
       usdt: '0x55d398326f99059fF775485246999027B3197955',
@@ -71,13 +71,14 @@ module.exports = {
     },
     polygon: {
       chainId: 137,
-      rpc: process.env.POLYGON_RPC || 'https://polygon.llamarpc.com,https://polygon-rpc.com,https://polygon.drpc.org,https://1rpc.io/polygon,https://rpc.ankr.com/polygon,https://polygon.publicnode.com',
+      rpc: process.env.POLYGON_RPC || 'https://polygon-rpc.com,https://polygon.drpc.org,https://1rpc.io/polygon,https://rpc.ankr.com/polygon,https://polygon.publicnode.com,https://poly-mainnet.gateway.pokt.network/v1/lb/62b8808603668a003a87f897',
       router: '0xa5e0829caced8ffdd4de3c43696c57f7d7a678ff',
       wrappedNative: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
       usdt: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
       tokens: [
         { name: 'BCOIN', address: '0xb2c63830d4478cb331142fac075a39671a5541dc', symbol: 'BCOIN', decimals: 18, pool: '0x8b4e00810c927bb1c02dee73d714a31121689ab3' },
-        { name: 'SEN', address: '0xfe302b8666539d5046cd9aa0707bb327f5f94c22', symbol: 'SEN', decimals: 18, pool: '0xd6c2de543dd1570315cc0bebcdaea522553b7e2b' }
+        { name: 'SEN', address: '0xfe302b8666539d5046cd9aa0707bb327f5f94c22', symbol: 'SEN', decimals: 18, pool: '0xd6c2de543dd1570315cc0bebcdaea522553b7e2b' },
+        { name: 'USDT', address: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', symbol: 'USDT', decimals: 6 }
       ],
       explorerUrl: 'https://polygonscan.com',
       explorerApi: process.env.POLYGONSCAN_API_KEY,

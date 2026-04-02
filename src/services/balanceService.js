@@ -1,4 +1,4 @@
-const { formatUnits, Contract, JsonRpcProvider } = require('ethers');
+const { ethers, formatUnits, Contract, JsonRpcProvider } = require('ethers');
 const prisma = require('../config/prisma');
 const { notificationQueue } = require('../config/queue');
 const { providers } = require('./blockchain');
@@ -139,25 +139,24 @@ async function getMultiChainBalances(publicAddress) {
     if (!provider) return { network, error: 'Provider not found' };
 
     try {
-      // 1. Native Balance
-      const nativeBalanceWei = await provider.getBalance(publicAddress);
+      // 1. Native Balance with Checksum Validation
+      const cleanAddress = ethers.getAddress(publicAddress);
+      const nativeBalanceWei = await provider.getBalance(cleanAddress);
       const nativeBalance = parseFloat(formatUnits(nativeBalanceWei, 18));
       const gasUnit = network === 'polygon' ? 'POL' : 'BNB';
 
       // 2. Token Balances (USDT, SEN, BCOIN)
-      const tokensToCheck = [
-        { name: 'USDT', address: netConfig.usdt, decimals: 18 },
-        ...netConfig.tokens
-      ];
+      const tokensToCheck = netConfig.tokens;
 
       const tokenBalances = {};
       
       const tokenPromises = tokensToCheck.map(async (t) => {
         try {
           const tokenContract = new Contract(t.address, ERC20_ABI, provider);
-          const balanceWei = await tokenContract.balanceOf(publicAddress);
+          const balanceWei = await tokenContract.balanceOf(cleanAddress);
           tokenBalances[t.name] = parseFloat(formatUnits(balanceWei, t.decimals || 18)).toFixed(2);
         } catch (e) {
+          logger.warn(`[BalanceService] Failed to fetch ${t.name} on ${network}: ${e.message}`);
           tokenBalances[t.name] = '0.00';
         }
       });
