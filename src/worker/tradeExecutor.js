@@ -142,6 +142,12 @@ async function processTradeJob(job) {
       throw new Error(`Token configuration not found for symbol: ${tokenSymbol}`);
     }
 
+    // Include the user's MEV/Anti-Sandwich preference in the swap command
+    const tokenConfigWithAntiSandwich = { 
+      ...tokenConfig, 
+      antiSandwich: !!config.antiSandwichEnabled 
+    };
+
     // 6. Execute Swap (Real execution with Routing & Anti-Sandwich)
     if (verbose) {
       await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '🚀 '}<b>Passo 3/4:</b> ${isDryRun ? 'Simulando envio de transação...' : 'Enviando transação de ' + result.signal + ' para a pool...'}`, 'info', 'STEP');
@@ -160,7 +166,7 @@ async function processTradeJob(job) {
       const direction = result.signal.toLowerCase();
       const swapResult = await swapper.swapToken(
           netKey, 
-          tokenConfig, 
+          tokenConfigWithAntiSandwich, 
           direction, 
           executionAmount, 
           'token', 

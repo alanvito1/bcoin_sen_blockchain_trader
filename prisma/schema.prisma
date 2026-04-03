@@ -83,6 +83,7 @@ model TradeConfig {
   window2Max     Int     @default(59)
   scheduleMode   String  @default("window")   // "window" | "interval"
   intervalMinutes Int    @default(60)           // used when scheduleMode = "interval"
+  antiSandwichEnabled Boolean @default(false)    // User toggle for MEV protection
   isOperating    Boolean @default(false)
 
   @@unique([userId, network, tokenPair])
@@ -114,4 +115,17 @@ model PriceTick {
   timestamp DateTime @default(now())
 
   @@index([symbol, network, timestamp])
+}
+
+model CustomToken {
+  id        String   @id @default(uuid())
+  network   String   // "BSC" or "POLYGON"
+  address   String   @unique
+  symbol    String
+  name      String?
+  decimals  Int      @default(18)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([network, address])
 }

@@ -5,7 +5,7 @@ const { Markup, Scenes } = require('telegraf');
 const prisma = require('../../config/prisma');
 const balanceService = require('../../services/balanceService');
 const logger = require('../../utils/logger');
-const { TIMEFRAME_MAP } = require('../../services/indicator');
+const { TIMEFRAME_MAP } = require('../../services/tradingStrategy');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -206,13 +206,14 @@ async function engineConfigHandler(ctx, network, token) {
     `📊 <b>Estratégia A</b> [${tfA} | MA${config.maPeriodA}]:  <code>${config.buyAmountA}</code> Buy / <code>${config.sellAmountA}</code> Sell\n` +
     `💎 <b>Estratégia B</b> [${tfB} | MA${config.maPeriodB}]:  <code>${config.buyAmountB}</code> Buy / <code>${config.sellAmountB}</code> Sell\n\n` +
     `⏰ <b>Agendamento:</b> <code>${scheduleLabel}</code>\n` +
-    `🔀 <b>Motores:</b> <code>${stratLabel}</code>   📈 ${rsiStr}\n\n` +
+    `🔀 <b>Motores:</b> <code>${stratLabel}</code>   📈 ${rsiStr}\n` +
+    `🛡️ <b>Anti-Sandwich:</b> <code>${config.antiSandwichEnabled ? 'ATIVADO (Taxa extra)' : 'DESATIVADO (Padrão)'}</code>\n\n` +
     `Escolha uma seção para configurar:`;
 
   const buttons = [
     [Markup.button.callback(`📊 Estratégia A (${tfA})`, 'setup_strategy_a'), Markup.button.callback(`💎 Estratégia B (${tfB})`, 'setup_strategy_b')],
     [Markup.button.callback('⏰ Agendamento', 'setup_schedule'), Markup.button.callback(`📉 Slippage: ${config.slippage}%`, 'edit_slippage')],
-    [Markup.button.callback(`📈 RSI: ${rsiStr}`, 'setup_rsi')],
+    [Markup.button.callback(`📈 RSI: ${rsiStr}`, 'setup_rsi'), Markup.button.callback(`🛡️ MEV: ${config.antiSandwichEnabled ? 'ON' : 'OFF'}`, 'toggle_mev')],
     [Markup.button.callback(`🔀 Motores: ${stratLabel}`, 'strategy_selector')],
     [config.isOperating
       ? Markup.button.callback('🔴 PAUSAR MOTOR', 'pause_bot')
@@ -634,6 +635,17 @@ async function toggleLogPreference(ctx, field) {
   return logSettingsHandler(ctx);
 }
 
+async function toggleMev(ctx) {
+  const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+  const newValue = !config.antiSandwichEnabled;
+  await prisma.tradeConfig.update({
+    where: { id: config.id },
+    data: { antiSandwichEnabled: newValue },
+  });
+  await ctx.answerCbQuery(`Anti-Sandwich ${newValue ? 'ATIVADO' : 'DESATIVADO'}`);
+  return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
+}
+
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
@@ -658,7 +670,8 @@ module.exports = {
   setTimeframe,
   setupRsiMenu,
   toggleRsi,
-  setupScheduleMenu,
+  setupScheduleMode,
   setScheduleMode,
   setIntervalPreset,
+  toggleMev,
 };

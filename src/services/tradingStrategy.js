@@ -6,14 +6,29 @@
  * @module services/tradingStrategy
  */
 
-const axios = require('axios');
 const config = require('../config');
+const prisma = require('../config/prisma');
+
+/**
+ * Valid timeframe strings accepted across the system.
+ */
+const TIMEFRAME_MAP = {
+  '5m':  { geckoTf: 'minute', aggregate: 5  },
+  '15m': { geckoTf: 'minute', aggregate: 15 },
+  '30m': { geckoTf: 'minute', aggregate: 30 },
+  '1h':  { geckoTf: 'hour',   aggregate: 1  },
+  '4h':  { geckoTf: 'hour',   aggregate: 4  },
+  '1d':  { geckoTf: 'day',    aggregate: 1  },
+  '1w':  { geckoTf: 'week',   aggregate: 1  },
+  '15':  { geckoTf: 'minute', aggregate: 15 },
+  '30':  { geckoTf: 'minute', aggregate: 30 },
+  '4':   { geckoTf: 'hour',   aggregate: 4  },
+  'hour':{ geckoTf: 'hour',   aggregate: 1  },
+  '1':   { geckoTf: 'hour',   aggregate: 1  },
+};
 
 /**
  * Calculates the Simple Moving Average (SMA) for a given set of candles.
- * @param {Array<Object>} candles - Array of candle objects with a 'close' property.
- * @param {number} period - The number of periods to calculate the average.
- * @returns {number|null} The calculated SMA or null if insufficient data.
  */
 function calculateMA(candles, period) {
     if (!candles || candles.length < period) return null;
@@ -23,10 +38,7 @@ function calculateMA(candles, period) {
 }
 
 /**
- * Calculates the Relative Strength Index (RSI) using the Wilder's Smoothing Method.
- * @param {Array<Object>} candles - Array of candle objects with a 'close' property.
- * @param {number} period - The RSI period (usually 14).
- * @returns {number|null} The RSI value (0-100) or null if insufficient data.
+ * Calculates the Relative Strength Index (RSI).
  */
 function calculateRSI(candles, period) {
     if (!candles || candles.length <= period) return null;
@@ -58,117 +70,55 @@ function calculateRSI(candles, period) {
 }
 
 /**
- * Robust fetch wrapper with exponential backoff and jitter for handling rate limits.
- * @param {string} url - The GeckoTerminal API endpoint.
- * @param {number} [retries=5] - Number of retry attempts.
- * @param {number} [backoff=2000] - Base delay in ms for backoff.
- * @returns {Promise<Object>} Axios response object.
- * @throws {Error} If all retries fail or a critical status is returned.
- */
-async function fetchWithRetry(url, retries = 5, backoff = 2000) {
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-    try {
-        return await axios.get(url, { headers: { 'Accept': 'application/json;version=20230203' } });
-    } catch (error) {
-        if (retries > 0 && error.response && (error.response.status === 429 || error.response.status >= 500)) {
-            const wait = (backoff * (6 - retries)) + (Math.random() * 1000);
-            console.log(`[Strategy] API Issue (${error.response.status}). Retrying in ${Math.round(wait)}ms...`);
-            await new Promise(resolve => setTimeout(resolve, wait));
-            return fetchWithRetry(url, retries - 1, backoff);
-        }
-        throw error;
-    }
-}
-
-/**
- * Fetches OHLCV data. Now primarily reads from the local Database (Phase 3 Scalability)
- * with a fallback to API if DB data is stale or insufficient.
- * @param {string} symbol - Token pair symbol (e.g., 'BCOINUSDT').
- * @param {string} interval - Desired timeframe (15, 30, 1h, 4h).
+ * Fetches OHLCV data from local Database (PriceTick).
+ * Consumes 0 API credits.
+ * @param {string} symbol - Token pair symbol (e.g., 'BCOIN/USDT').
+ * @param {string} interval - Desired timeframe (5m, 15m, 30m, 1h, 4h).
  * @param {number} [limit=100] - Number of candles to retrieve.
  * @returns {Promise<Array<Object>>} Normalized candle array [{close, time}].
  */
 async function fetchCandles(symbol, interval, limit = 100) {
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
-    
-    const tokenPair = symbol === 'BCOINUSDT' ? 'BCOIN/USDT' : 'SEN/USDT';
-    const network = symbol === 'SENUSDT' ? 'POLYGON' : 'BSC'; // Simple heuristic for our core coins
+    const tokenPair = symbol.includes('/') ? symbol : (symbol === 'BCOINUSDT' ? 'BCOIN/USDT' : (symbol === 'SENUSDT' ? 'SEN/USDT' : symbol));
+    const network = symbol.includes('SEN') ? 'POLYGON' : 'BSC'; 
+    const tf = TIMEFRAME_MAP[interval] || TIMEFRAME_MAP['30m'];
 
-    // 1. Try DB First (Ticks are 1m)
     try {
-        const minutesNeeded = parseInt(interval) || 60;
-        const totalMinutes = minutesNeeded * limit;
+        const minutesNeeded = tf.geckoTf === 'hour' ? tf.aggregate * 60 : tf.aggregate;
+        const totalTicksNeeded = minutesNeeded * limit;
         
         const ticks = await prisma.priceTick.findMany({
             where: { symbol: tokenPair, network },
             orderBy: { timestamp: 'desc' },
-            take: totalMinutes
+            take: totalTicksNeeded
         });
 
-        if (ticks.length >= limit) {
-            // Aggregate ticks into candles
+        if (ticks.length >= totalTicksNeeded) {
             const candles = [];
             for (let i = 0; i < ticks.length; i += minutesNeeded) {
                 const group = ticks.slice(i, i + minutesNeeded);
                 if (group.length > 0) {
                     candles.push({
-                        close: group[0].price, // Latest price in the interval
+                        close: group[0].price, 
                         time: group[0].timestamp.getTime() / 1000
                     });
                 }
             }
-            // Check if DB data is too old (> 10 mins)
+
             const latestTick = ticks[0].timestamp;
-            if ((Date.now() - latestTick.getTime()) < 1000 * 60 * 10) {
-                console.log(`[Strategy] Using DB Data for ${symbol} (${candles.length} candles aggregated from ${ticks.length} ticks)`);
-                return candles.reverse();
+            const threshold = Math.max(1000 * 60 * 10, 1000 * 60 * minutesNeeded * 2);
+            
+            if ((Date.now() - latestTick.getTime()) < threshold) {
+                console.log(`[Strategy] ${symbol} | Using Cache (${candles.length} candles from ${ticks.length} ticks)`);
+                return candles.reverse().slice(-limit);
             }
         }
-        console.log(`[Strategy] DB Data for ${symbol} stale or insufficient. Falling back to API...`);
+        
+        console.warn(`[Strategy] ${symbol} | DB Data stale or insufficient (${ticks.length}/${totalTicksNeeded} ticks). HOLD advised.`);
     } catch (dbErr) {
-        console.error(`[Strategy] DB Error fetching ticks: ${dbErr.message}`);
+        console.error(`[Strategy] CRITICAL: DB Error fetching ticks: ${dbErr.message}`);
     }
 
-    // 2. Fallback to GeckoTerminal API (Original Logic)
-    const poolMap = {
-        'BCOINUSDT': { network: 'bsc', addr: '0x2eebe0c34da9ba65521e98cbaa7d97496d05f489' },
-        'SENUSDT': { network: 'polygon', addr: '0xd6c2de543dd1570315cc0bebcdaea522553b7e2b' }
-    };
-    const target = poolMap[symbol] || poolMap['BCOINUSDT'];
-    const networkMap = { 'polygon': 'polygon_pos', 'bsc': 'bsc' };
-    const geckoNetwork = networkMap[target.network] || target.network;
-
-    let timeframe = 'minute';
-    let aggregate = 1;
-    let fetchLimit = limit;
-
-    if (interval === '15') {
-        timeframe = 'minute';
-        aggregate = 15;
-    } else if (interval === '30') {
-        timeframe = 'minute';
-        aggregate = 15;
-        fetchLimit = limit * 2;
-    } else if (interval === '4' || interval === '4h') {
-        timeframe = 'hour';
-        aggregate = 4;
-    } else if (interval === '1' || interval === '1h') {
-        timeframe = 'hour';
-        aggregate = 1;
-    }
-
-    const url = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/pools/${target.addr}/ohlcv/${timeframe}?aggregate=${aggregate}&limit=${fetchLimit}`;
-    const response = await fetchWithRetry(url);
-    const ohlcv = response.data.data.attributes.ohlcv_list;
-
-    if (interval === '30') {
-        const sampled = [];
-        for (let i = 0; i < ohlcv.length; i += 2) sampled.push(ohlcv[i]);
-        return sampled.reverse().map(d => ({ close: parseFloat(d[4]), time: d[0] }));
-    }
-
-    return ohlcv.reverse().map(d => ({ close: parseFloat(d[4]), time: d[0] }));
+    return []; // Return empty if no data, logic will HOLD.
 }
 
 /**

@@ -36,8 +36,11 @@ const {
   setupScheduleMenu,
   setScheduleMode,
   setIntervalPreset,
+  toggleMev,
 } = require('./features/tradePanel');
 const { storePanelHandler, selectNetworkHandler, selectAssetHandler, confirmCheckoutHandler, executePaymentHandler, onrampFlowHandler } = require('./features/store');
+const { addTokenScene } = require('./features/tokenManager');
+const { statusHandler, historyHandler } = require('./features/status');
 
 const { 
   adminHandler, 
@@ -50,6 +53,7 @@ const {
 const { supportPanelHandler, reportIssueHandler } = require('./features/support');
 const { toolsPanelHandler, gasPriceHandler, priceListHandler, securityToolHandler } = require('./features/tools');
 const { referralPanelHandler, setupPayoutAddressScene } = require('./features/referral');
+const rateLimit = require('./middleware/rateLimit');
 const { TERMS_TEXT } = require('./constants/texts');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -59,24 +63,51 @@ const stage = new Scenes.Stage([
   importWalletScene,
   updateConfigScene,
   disconnectWalletScene,
-  setupPayoutAddressScene
+  setupPayoutAddressScene,
+  addTokenScene
 ]);
 
 
 const sessionStore = require('./sessionStore');
+
+// 0. Maintenance Middleware
+bot.use(async (ctx, next) => {
+  const isMaintenance = process.env.MAINTENANCE_MODE === 'true';
+  const isAdmin = String(ctx.from?.id) === String(process.env.ADMIN_TELEGRAM_ID);
+  
+  if (isMaintenance && !isAdmin) {
+    const maintenanceText = `🛠️ <b>MODO MANUTENÇÃO ATIVO</b>\n\n` +
+      `Estamos realizando melhorias estruturais no terminal para garantir a máxima segurança e performance.\n\n` +
+      `⏳ <b>Tempo Estimado:</b> Indeterminado.\n\n` +
+      `<i>Por favor, volte mais tarde. Avisaremos quando o sistema estiver 100% online novamente!</i>`;
+    
+    if (ctx.callbackQuery) {
+      return ctx.answerCbQuery('Sistema em manutenção. Tente novamente mais tarde.', { show_alert: true });
+    }
+    return ctx.replyWithHTML(maintenanceText);
+  }
+  return next();
+});
+
 bot.use(session({
   property: 'session',
   getSessionKey: (ctx) => ctx.from && ctx.chat && `${ctx.from.id}:${ctx.chat.id}`,
   store: sessionStore
 }));
+bot.use(rateLimit);
 bot.use(stage.middleware());
 
 // 2. Commands
 bot.command('start', startHandler);
+bot.command('add', (ctx) => ctx.scene.enter('ADD_TOKEN_SCENE'));
 bot.command('loja', storePanelHandler);
-bot.command('comprarcrypto', onrampFlowHandler);
-bot.command('admin', adminHandler);
-bot.command('broadcast', broadcastHandler);
+bot.command('wallet', walletPanelHandler);
+bot.command('carteira', walletPanelHandler);
+bot.command('referral', referralPanelHandler);
+bot.command('indicacao', referralPanelHandler);
+bot.command('status', statusHandler);
+bot.command('historico', historyHandler);
+bot.command('ajuda', supportPanelHandler);
 bot.command('cancel', async (ctx) => {
   await ctx.scene.leave();
   return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');
@@ -181,9 +212,10 @@ VALID_TFS.forEach(tf => {
   bot.action(`set_tf_b_${tf}`, (ctx) => setTimeframe(ctx, 'timeframeB', tf, timeframeSelectorB));
 });
 
-// RSI
+// RSI & MEV
 bot.action('setup_rsi',  setupRsiMenu);
 bot.action('toggle_rsi', toggleRsi);
+bot.action('toggle_mev', toggleMev);
 
 // Schedule Mode
 bot.action('setup_schedule',       setupScheduleMenu);
@@ -274,6 +306,8 @@ bot.action('tool_price_list', priceListHandler);
 bot.action('tool_security', securityToolHandler);
 
 bot.action('referral_panel', referralPanelHandler);
+bot.action('status_panel', statusHandler);
+bot.action('view_history', historyHandler);
 bot.action('setup_referral_payout', (ctx) => ctx.scene.enter('SETUP_PAYOUT_ADDRESS'));
 
 bot.action('start_panel', startHandler);

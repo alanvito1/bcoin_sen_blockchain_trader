@@ -39,10 +39,10 @@ async function fetchPrice(pool) {
       }
     });
 
-    // Keep DB clean: delete ticks older than 24 hours
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // Keep DB clean: delete ticks older than 30 days (needed for 4h/daily indicators)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     await prisma.priceTick.deleteMany({
-      where: { timestamp: { lt: oneDayAgo } }
+      where: { timestamp: { lt: thirtyDaysAgo } }
     });
 
     return price;

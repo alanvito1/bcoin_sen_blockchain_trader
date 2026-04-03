@@ -126,18 +126,23 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     return null;
   }
 
-  // 2. Resolve MEV Wallet for broadcasting
-  // If externalSigner is provided, we try to reconnect it to the MEV provider
+  // 2. Resolve broadcast wallet: Use MEV/Private RPC only if antiSandwich is enabled
   let broadcastWallet = wallet;
-  try {
-    const mevProvider = require('./blockchain').mevProviders[networkName];
-    if (mevProvider && wallet.privateKey) {
-        broadcastWallet = new ethers.Wallet(wallet.privateKey, mevProvider);
-    } else {
-        broadcastWallet = require('./blockchain').mevWallets[networkName] || wallet;
+  if (tokenConfig.antiSandwich) {
+    try {
+      const { mevProviders, mevWallets } = require('./blockchain');
+      const mevProvider = mevProviders[networkName];
+      if (mevProvider && wallet.privateKey) {
+          broadcastWallet = new ethers.Wallet(wallet.privateKey, mevProvider);
+          logger.info(`[${networkName}] 🛡️ Anti-Sandwich ATIVADO: Usando RPC Protegido.`);
+      } else {
+          broadcastWallet = mevWallets[networkName] || wallet;
+      }
+    } catch (e) {
+      logger.warn(`[${networkName}] Falha ao conectar ao RPC MEV. Usando canal padrão.`);
     }
-  } catch (e) {
-    // Fallback to current internal wallet
+  } else {
+    logger.info(`[${networkName}] ⚡ Modo Padrão: Transação enviada via RPC Público.`);
   }
 
   const network = config.networks[networkName];

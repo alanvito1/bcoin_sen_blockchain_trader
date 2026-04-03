@@ -131,7 +131,12 @@ async function walletPanelHandler(ctx) {
       // Fetch Multi-Chain Balances
       const multiBalances = await balanceService.getMultiChainBalances(user.wallet.publicAddress);
       
+      const creditsDisplay = user.subscriptionExpiresAt && user.subscriptionExpiresAt > new Date()
+        ? '💎 <b>Plano VIP (Ilimitado)</b>'
+        : `🔋 <b>Bateria:</b> <code>${user.credits.toLocaleString()}</code> Trades`;
+
       text = `💳 <b>Sua Carteira Multi-Rede</b>\n` +
+        `👤 <b>Status:</b> ${creditsDisplay}\n` +
         `📍 <b>Endereço:</b> <code>${user.wallet.publicAddress}</code>\n\n`;
 
       // 1. Polygon Section
