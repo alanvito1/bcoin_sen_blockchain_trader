@@ -4,21 +4,21 @@ const logger = require('../../utils/logger');
 const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID;
 
 const ISSUE_TYPES = {
-  'ENGINE': '🚀 Motor não abre/não inicia',
-  'WALLET': '🔌 Carteira desconectou/erro',
-  'PRICE': '💎 Erro na cotação de moedas',
-  'TX': '⏳ Transação travada (Pending)',
-  'PAUSE': '🛑 O robô parou sozinho',
-  'OTHER': '⚙️ Outro problema técnico'
+  'ENGINE': '🚀 Falha na Impulsão (Motor)',
+  'WALLET': '🔌 Desconexão do Inventário',
+  'PRICE': '💎 Erro no Radar de Gemas',
+  'TX': '⏳ Explosão Travada (Pending)',
+  'PAUSE': '🛑 O Bomber parou sozinho',
+  'OTHER': '⚙️ Outro Bug no Sistema'
 };
 
 /**
  * Step 1: Support Menu with categorizations
  */
 async function supportPanelHandler(ctx) {
-  const text = `🛠️ <b>CENTRAL DE NOTIFICAÇÕES</b>\n\n` +
-    `Escolha o motivo técnico do seu relato para que possamos analisar os logs com precisão:\n\n` +
-    `<i>Seu reporte será enviado diretamente ao administrador.</i>`;
+  const text = `🛠️ <b>SUPORTE AO PLAYER</b>\n\n` +
+    `Escolha o erro detectado na arena para que possamos debugar o sistema com precisão:\n\n` +
+    `<i>Seu reporte será enviado diretamente ao Game Master.</i>`;
 
   const buttons = Object.entries(ISSUE_TYPES).map(([key, label]) => ([
     Markup.button.callback(label, `report_issue_type_${key}`)
@@ -38,12 +38,12 @@ async function reportIssueHandler(ctx, typeKey = 'OTHER') {
   const firstName = ctx.from.first_name || 'Usuário';
   const issueLabel = ISSUE_TYPES[typeKey] || typeKey;
   
-  const textAdmin = `🚨 <b>ALERTA DE SUPORTE - BOT</b>\n\n` +
-    `👤 <b>Usuário:</b> ${firstName} (@${username})\n` +
+  const textAdmin = `🚨 <b>MISSÃO CRÍTICA: BUG REPORT</b>\n\n` +
+    `👤 <b>Player:</b> ${firstName} (@${username})\n` +
     `🆔 <b>ID:</b> <code>${userId}</code>\n` +
-    `🏷️ <b>Motivo:</b> ${issueLabel}\n` +
+    `🏷️ <b>Bug:</b> ${issueLabel}\n` +
     `🕒 <b>Data:</b> ${new Date().toLocaleString('pt-BR')}\n\n` +
-    `<i>O usuário relatou este problema. Verifique os logs do sistema.</i>`;
+    `<i>O player relatou uma falha na arena. Verifique os logs agora.</i>`;
 
   try {
     if (!ADMIN_ID) {

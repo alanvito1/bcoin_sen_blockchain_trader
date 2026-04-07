@@ -1,23 +1,22 @@
 const TERMS_TEXT = 
-  `🛡️ <b>TERMOS DE USO E RESPONSABILIDADE</b>\n\n` +
-  `Este é um motor de trading algorítmico automatizado. Ao prosseguir, você declara estar ciente de:\n\n` +
-  `📖 <b>Como Funciona:</b>\n` +
-  `- O bot utiliza estratégias de <b>Grid MA21</b> (Médias Móveis) nos tempos de 30m e 4h.\n` +
-  `- Execuções ocorrem aleatoriamente dentro de <b>duas janelas</b> por hora (Janela 1 e 2).\n` +
-  `- Você pode customizar os montantes de compra e venda separadamente por estratégia.\n\n` +
-  `⚠️ <b>Segurança da Carteira:</b>\n` +
-  `- A carteira utilizada é gerada por um algoritmo do Telegram. <b>Não oferecemos garantia absoluta contra hacks ou falhas de segurança.</b>\n` +
-  `- <b>SEJA INTELIGENTE:</b> Deposite apenas o capital necessário para as operações planejadas. Não mantenha grandes quantias paradas no bot.\n` +
-  `- Não há garantia de que o robô rodará para sempre, portanto, faça a gestão cuidadosa de quantos ativos você mantém nesta carteira.\n\n` +
-  `🛠️ <b>Transparência Técnica:</b>\n` +
-  `- Suas chaves são protegidas por criptografia <b>AES-256-GCM</b>.\n` +
-  `- Cada carteira possui um vetor de inicialização (IV) e tag de autenticação exclusivos.\n` +
-  `- A chave mestre de criptografia reside apenas em ambiente isolado e <b>nunca toca o banco de dados</b>.\n\n` +
-  `🚫 <b>Risco e Uso Consciente:</b>\n` +
-  `- Nunca arrisque capital que você não possa perder. O mercado de cripto é volátil.\n` +
-  `- Esta é uma ferramenta focada em <b>acumular moedas do jogo</b> de forma eficiente.\n\n` +
-  `<i>Ao clicar em Aceitar, você assume total responsabilidade por suas operações.</i>`;
+  `👾 <b>INSERT COIN: REGRAS DO JOGO</b> 🕹️\n\n` +
+  `Bem-vindo à Arena, Bomber Trader! Este é um motor de trading algorítmico automatizado. Antes de soltar as bombas, você precisa estar ciente dos termos:\n\n` +
+  `📜 <b>COMO JOGAR (Battle Plan):</b>\n` +
+  `- O bot utiliza estratégias de <b>Grid MA21</b> (Médias Móveis) em 30m e 4h.\n` +
+  `- As bombas explodem (trades ocorrem) aleatoriamente dentro de <b>duas janelas</b> por hora.\n` +
+  `- Você customiza o "Firepower" (montantes de compra/venda) por estratégia.\n\n` +
+  `🛡️ <b>ESCUDO DE SEGURANÇA (Wallet):</b>\n` +
+  `- Sua carteira é gerada pelo sistema. <b>Não garantimos 100% de invulnerabilidade contra ataques externos.</b>\n` +
+  `- <b>PLAYER SKILL:</b> Não mantenha todo o seu inventário no bot. Deposite apenas o que for usar para as explosões.\n\n` +
+  `⚙️ <b>ESPECIFICAÇÕES TÉCNICAS (Specs):</b>\n` +
+  `- Chaves protegidas por criptografia <b>AES-256-GCM</b>.\n` +
+  `- A "Master Key" nunca toca o banco de dados. Está em uma Dark Zone isolada.\n\n` +
+  `⚠️ <b>GAME OVER (Riscos):</b>\n` +
+  `- Nunca aposte vidas que você não possa perder. O mercado cripto é um boss difícil.\n` +
+  `- Foco: <b>Farmar moedas do jogo</b> com eficiência máxima.\n\n` +
+  `<i>Ao clicar em ✅ ACEITAR, você entra na arena sob sua conta e risco.</i>`;
 
 module.exports = {
   TERMS_TEXT
 };
+

@@ -11,7 +11,7 @@ const encryption = require('../../utils/encryption');
 const importWalletScene = new Scenes.WizardScene(
   'IMPORT_WALLET_SCENE',
   async (ctx) => {
-    await ctx.reply('⚠️ <b>AVISO DE SEGURANÇA:</b> Recomendamos usar uma "Burner Wallet". Nunca use sua carteira principal.\n\nPor favor, envie sua <b>Chave Privada (Private Key)</b> abaixo:', { parse_mode: 'HTML' });
+    await ctx.reply('🛡️ <b>ESCUDO ATIVADO:</b> Recomendamos usar uma "Burner Wallet". Nunca use seu cofre principal.\n\nPor favor, insira o <b>Código de Acesso (Private Key)</b> abaixo:', { parse_mode: 'HTML' });
     return ctx.wizard.next();
   },
   async (ctx) => {
@@ -123,28 +123,28 @@ async function walletPanelHandler(ctx) {
     let text = '';
 
     if (!user.wallet) {
-      text = '💳 <b>Gestão de Carteira</b>\nVocê ainda não possui uma carteira vinculada ao seu robô.\n\nEscolha como deseja prosseguir:';
-      buttons.push([Markup.button.callback('🎲 Gerar Carteira Automática', 'generate_wallet')]);
-      buttons.push([Markup.button.callback('🔑 Importar Chave Privada', 'import_wallet')]);
-      buttons.push([Markup.button.callback('⬅️ Voltar', 'start_panel')]);
+      text = '💰 <b>Gestão de Inventário</b>\nVocê ainda não possui um cofre vinculado ao seu robô.\n\nEscolha como deseja prosseguir:';
+      buttons.push([Markup.button.callback('🎲 Forjar Cofre Automático', 'generate_wallet')]);
+      buttons.push([Markup.button.callback('🔑 Importar Key de Acesso', 'import_wallet')]);
+      buttons.push([Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]);
     } else {
       // Fetch Multi-Chain Balances
       const multiBalances = await balanceService.getMultiChainBalances(user.wallet.publicAddress);
       
       const creditsDisplay = user.subscriptionExpiresAt && user.subscriptionExpiresAt > new Date()
-        ? '💎 <b>Plano VIP (Ilimitado)</b>'
-        : `🔋 <b>Bateria:</b> <code>${user.credits.toLocaleString()}</code> Trades`;
+        ? '💎 <b>Plano VIP (Energy Infinita)</b>'
+        : `🔋 <b>Energy:</b> <code>${user.credits.toLocaleString()}</code> Explosões`;
 
-      text = `💳 <b>Sua Carteira Multi-Rede</b>\n` +
-        `👤 <b>Status:</b> ${creditsDisplay}\n` +
-        `📍 <b>Endereço:</b> <code>${user.wallet.publicAddress}</code>\n\n`;
+      text = `💰 <b>Status do Inventário</b>\n` +
+        `👤 <b>Badge:</b> ${creditsDisplay}\n` +
+        `📍 <b>Endereço do Cofre:</b> <code>${user.wallet.publicAddress}</code>\n\n`;
 
       // 1. Polygon Section
       const poly = multiBalances.polygon;
-      text += `🟣 <b>Rede Polygon (MATIC)</b>\n`;
+      text += `🟣 <b>Setor Polygon (MATIC)</b>\n`;
       if (poly) {
         text += `💰 <b>Gas:</b> ${poly.nativeBalance} ${poly.gasUnit}\n`;
-        text += `💎 <b>Ativos:</b>\n`;
+        text += `💎 <b>Loot Disponível:</b>\n`;
         text += `  • SEN: ${poly.tokens.SEN || '0.00'}\n`;
         text += `  • BCOIN: ${poly.tokens.BCOIN || '0.00'}\n`;
         text += `  • USDT: ${poly.tokens.USDT || '0.00'}\n`;
@@ -155,10 +155,10 @@ async function walletPanelHandler(ctx) {
 
       // 2. BSC Section
       const bsc = multiBalances.bsc;
-      text += `🟡 <b>Rede BSC (Binance)</b>\n`;
+      text += `🟡 <b>Setor BSC (Binance)</b>\n`;
       if (bsc) {
         text += `💰 <b>Gas:</b> ${bsc.nativeBalance} ${bsc.gasUnit}\n`;
-        text += `💎 <b>Ativos:</b>\n`;
+        text += `💎 <b>Loot Disponível:</b>\n`;
         text += `  • SEN: ${bsc.tokens.SEN || '0.00'}\n`;
         text += `  • BCOIN: ${bsc.tokens.BCOIN || '0.00'}\n`;
         text += `  • USDT: ${bsc.tokens.USDT || '0.00'}\n`;
@@ -169,9 +169,9 @@ async function walletPanelHandler(ctx) {
 
       text += `O que deseja fazer?`;
 
-      buttons.push([Markup.button.callback('🔄 Atualizar Saldos', 'wallet_panel')]);
-      buttons.push([Markup.button.callback('🗑️ Desconectar Carteira', 'disconnect_wallet_confirm')]);
-      buttons.push([Markup.button.callback('⬅️ Voltar', 'start_panel')]);
+      buttons.push([Markup.button.callback('🔄 Sync Loot (Atualizar)', 'wallet_panel')]);
+      buttons.push([Markup.button.callback('🗑️ Abandonar Loot (Deletar)', 'disconnect_wallet_confirm')]);
+      buttons.push([Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]);
     }
 
     const keyboard = Markup.inlineKeyboard(buttons);

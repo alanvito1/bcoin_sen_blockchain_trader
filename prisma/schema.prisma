@@ -27,11 +27,27 @@ model User {
   referralBalanceBCOIN  Float          @default(0.0)
   referralBalanceSEN    Float          @default(0.0)
   referralBalanceUSDT   Float          @default(0.0)
+  xp                    Int            @default(0)
+  level                 Int            @default(1)
+  commissionRate        Float          @default(0.10)
   tradeConfigs          TradeConfig[]
   tradeHistory          TradeHistory[]
+  commissionLogs        CommissionLog[] @relation("ReferralRewards")
   referredBy            User?          @relation("Referral", fields: [referredById], references: [id])
   referrals             User[]         @relation("Referral")
   wallet                Wallet?
+}
+
+model CommissionLog {
+  id          String   @id @default(uuid())
+  referrerId  String
+  buyerId     String
+  amountUSD   Float
+  commission  Float
+  asset       String
+  txHash      String
+  createdAt   DateTime @default(now())
+  referrer    User     @relation("ReferralRewards", fields: [referrerId], references: [id])
 }
 
 model Session {

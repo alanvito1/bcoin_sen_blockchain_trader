@@ -52,7 +52,7 @@ const {
 } = require('./commands/admin');
 const { supportPanelHandler, reportIssueHandler } = require('./features/support');
 const { toolsPanelHandler, gasPriceHandler, priceListHandler, securityToolHandler } = require('./features/tools');
-const { referralPanelHandler, setupPayoutAddressScene } = require('./features/referral');
+const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
 const rateLimit = require('./middleware/rateLimit');
 const { TERMS_TEXT } = require('./constants/texts');
 
@@ -76,10 +76,10 @@ bot.use(async (ctx, next) => {
   const isAdmin = String(ctx.from?.id) === String(process.env.ADMIN_TELEGRAM_ID);
   
   if (isMaintenance && !isAdmin) {
-    const maintenanceText = `🛠️ <b>MODO MANUTENÇÃO ATIVO</b>\n\n` +
-      `Estamos realizando melhorias estruturais no terminal para garantir a máxima segurança e performance.\n\n` +
-      `⏳ <b>Tempo Estimado:</b> Indeterminado.\n\n` +
-      `<i>Por favor, volte mais tarde. Avisaremos quando o sistema estiver 100% online novamente!</i>`;
+    const maintenanceText = `🛠️ <b>ARENA EM MANUTENÇÃO: UPGRADE DE HARDWARE</b>\n\n` +
+      `Estamos tunando os servidores para garantir explosões mais rápidas e seguras na arena.\n\n` +
+      `⏳ <b>Tempo Estimado:</b> Sincronizando blocos.\n\n` +
+      `<i>Por favor, volte ao lobby mais tarde. O Boss avisará quando o sistema estiver 100% online!</i>`;
     
     if (ctx.callbackQuery) {
       return ctx.answerCbQuery('Sistema em manutenção. Tente novamente mais tarde.', { show_alert: true });
@@ -257,18 +257,18 @@ bot.action(/^confirm_checkout_(.+)_(.+)_(.+)$/, (ctx) => confirmCheckoutHandler(
 bot.action(/^execute_payment_(.+)_(.+)_(.+)_(.+)$/, (ctx) => executePaymentHandler(ctx, ctx.match[1], ctx.match[2], ctx.match[3], ctx.match[4]));
 
 bot.action('quick_guide', (ctx) => {
-  const text = `📖 <b>GUIA RÁPIDO DO TERMINAL</b>\n\n` +
-    `1️⃣ <b>Configure sua Carteira:</b> No menu Carteira, gere uma nova ou importe uma existente.\n` +
-    `2️⃣ <b>Abasteça com Gás:</b> Envie uma pequena quantia de POL (Polygon) ou BNB (BSC) para cobrir as taxas.\n` +
-    `3️⃣ <b>Compre Créditos:</b> Na Loja, adquira energia para as transações.\n` +
-    `4️⃣ <b>Ative o Robô:</b> No Painel de Controle, escolha seu par e clique em "INICIAR".\n\n` +
-    `<i>O robô operará 24h/dia seguindo as janelas de execução configuradas.</i>`;
+  const text = `📖 <b>MANUAL DO BOMBER: REGRAS DA ARENA</b>\n\n` +
+    `1️⃣ <b>Equipe seu Cofre:</b> No menu Inventário, forneça sua chave ou forje uma nova.\n` +
+    `2️⃣ <b>Carga de Gás:</b> Envie MATIC (Polygon) ou BNB (BSC) para cobrir o custo das explosões.\n` +
+    `3️⃣ <b>Compre Munição:</b> No Item Shop, adquira Fire-Charges para as operações.\n` +
+    `4️⃣ <b>Plante a Bomba:</b> Na Arena, escolha seu par e clique em "PLANTAR BOMBA".\n\n` +
+    `<i>O robô operará 24h/dia seguindo seus timers de detonação.</i>`;
   
   return ctx.editMessageText(text, { 
     parse_mode: 'HTML', 
     reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback('📄 Ver Termos de Uso', 'view_terms')],
-      [Markup.button.callback('⬅️ Voltar ao Terminal', 'start_panel')]
+      [Markup.button.callback('📜 Regras do Jogo (Termos)', 'view_terms')],
+      [Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]
     ]).reply_markup
   });
 });
@@ -276,17 +276,17 @@ bot.action('quick_guide', (ctx) => {
 bot.action('view_terms', (ctx) => {
   return ctx.editMessageText(TERMS_TEXT, {
     parse_mode: 'HTML',
-    reply_markup: Markup.inlineKeyboard([[Markup.button.callback('⬅️ Voltar ao Guia', 'quick_guide')]]).reply_markup
+    reply_markup: Markup.inlineKeyboard([[Markup.button.callback('⬅️ Voltar ao Manual', 'quick_guide')]]).reply_markup
   });
 });
 
 bot.action('support_link', (ctx) => {
-  const text = `🛠️ <b>CENTRAL DE SUPORTE</b>\n\n` +
-    `Precisa de ajuda técnica ou comercial?\n\n` +
-    `• <b>Suporte Direto:</b> @SeuSuporteUser\n` +
-    `• <b>Bugs:</b> Use o botão abaixo para reportar travamentos.\n` +
-    `• <b>Parcerias:</b> Parcerias e White-label.\n\n` +
-    `<i>Nosso tempo médio de resposta é de 2 horas em dias úteis.</i>`;
+  const text = `🛠️ <b>CENTRAL DE COMANDO (SUPORTE)</b>\n\n` +
+    `Precisa de ajuda com seus itens ou power-ups?\n\n` +
+    `• <b>Game Master:</b> @SeuSuporteUser\n` +
+    `• <b>Bugs:</b> Use o botão abaixo para reportar falhas na arena.\n` +
+    `• <b>Guilda:</b> Parcerias e White-label.\n\n` +
+    `<i>Nossa guilda responde em tempo real em dias úteis.</i>`;
 
   return ctx.editMessageText(text, { 
     parse_mode: 'HTML', 
@@ -309,6 +309,7 @@ bot.action('referral_panel', referralPanelHandler);
 bot.action('status_panel', statusHandler);
 bot.action('view_history', historyHandler);
 bot.action('setup_referral_payout', (ctx) => ctx.scene.enter('SETUP_PAYOUT_ADDRESS'));
+bot.action('view_loot_history', showLootHistoryHandler);
 
 bot.action('start_panel', startHandler);
 

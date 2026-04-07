@@ -28,8 +28,8 @@ async function statusHandler(ctx) {
     const activeEngines = user.tradeConfigs.length;
     const totalTrades = user._count.tradeHistory;
     const creditsDisplay = user.subscriptionExpiresAt && user.subscriptionExpiresAt > new Date()
-      ? '💎 <b>VIP Ilimitado</b>'
-      : `🔋 <b>${user.credits.toLocaleString()}</b> Trades`;
+      ? '💎 <b>PASS VIP (Lava Shield)</b>'
+      : `🔋 <b>${user.credits.toLocaleString()}</b> Fire-Charges`;
 
     // Last 3 user trades
     const lastTrades = await prisma.tradeHistory.findMany({
@@ -38,14 +38,14 @@ async function statusHandler(ctx) {
       take: 3
     });
 
-    let text = `📊 <b>DASHBOARD DE STATUS</b>\n\n` +
-      `👤 <b>Sua Conta:</b>\n` +
-      `│ 🔋 <b>Bateria:</b> ${creditsDisplay}\n` +
-      `│ 🤖 <b>Motores Ativos:</b> <code>${activeEngines}</code>\n` +
-      `│ 📈 <b>Total Operações:</b> <code>${totalTrades}</code>\n\n`;
+    let text = `📊 <b>PAINEL DO BOMBER: STATUS & XP</b>\n\n` +
+      `👤 <b>Seu Hero:</b>\n` +
+      `│ 🔋 <b>Energy:</b> ${creditsDisplay}\n` +
+      `│ 🤖 <b>Bombas Armadas:</b> <code>${activeEngines}</code>\n` +
+      `│ 📈 <b>Total de Explosões:</b> <code>${totalTrades}</code>\n\n`;
 
     if (lastTrades.length > 0) {
-      text += `🕒 <b>Últimas Atividades:</b>\n`;
+      text += `🕒 <b>Relatório de Guerrilha:</b>\n`;
       text += lastTrades.map(t => {
         const icon = t.status === 'SUCCESS' ? '✅' : t.status === 'FAILED' ? '❌' : '⏳';
         return `│ ${icon} ${t.type} (${t.createdAt.toLocaleTimeString('pt-BR')}) - ${t.status}`;
@@ -59,17 +59,17 @@ async function statusHandler(ctx) {
       const uptimeH = Math.floor(os.uptime() / 3600);
       const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
       
-      text += `🖥️ <b>SISTEMA (ADMIN)</b>\n` +
-        `│ 🗄️ <b>Prisma DB:</b> ${dbOnline}\n` +
-        `│ ⚙️ <b>Queue BullMQ:</b> <code>${queueJobs} jobs</code>\n` +
-        `│ ⏳ <b>Uptime VPS:</b> <code>${uptimeH}h</code>\n` +
-        `│ 🧠 <b>Memória Livre:</b> <code>${freeMem} GB</code>\n`;
+      text += `🖥️ <b>SISTEMA CENTRAL (GAME MASTER)</b>\n` +
+        `│ 🗄️ <b>Core DB:</b> ${dbOnline}\n` +
+        `│ ⚙️ <b>Signal Queue:</b> <code>${queueJobs} jobs</code>\n` +
+        `│ ⏳ <b>Server Uptime:</b> <code>${uptimeH}h</code>\n` +
+        `│ 🧠 <b>Available RAM:</b> <code>${freeMem} GB</code>\n`;
     }
 
     const buttons = [
-      [Markup.button.callback('🔄 Atualizar', 'status_panel')],
-      [Markup.button.callback('📜 Ver Histórico Completo', 'view_history')],
-      [Markup.button.callback('⬅️ Voltar', 'start_panel')]
+      [Markup.button.callback('🔄 Sync Board (Atualizar)', 'status_panel')],
+      [Markup.button.callback('📜 Ver Arquivo de Batalhas', 'view_history')],
+      [Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]
     ];
 
     if (ctx.callbackQuery) {
@@ -101,7 +101,7 @@ async function historyHandler(ctx) {
       return ctx.answerCbQuery('⚠️ Você ainda não possui trades registrados.');
     }
 
-    let text = `📜 <b>HISTÓRICO RECENTE (10 ÚLTIMOS)</b>\n\n`;
+    let text = `📜 <b>ARQUIVO DE BATALHAS RECENTES (10 ÚLTIMOS)</b>\n\n`;
     text += trades.map(t => {
       const date = t.createdAt.toLocaleDateString('pt-BR');
       const time = t.createdAt.toLocaleTimeString('pt-BR');

@@ -12,14 +12,14 @@ const logger = require('../../utils/logger');
 const addTokenScene = new Scenes.WizardScene(
   'ADD_TOKEN_SCENE',
   async (ctx) => {
-    const text = `💎 <b>ADICIONAR NOVO TOKEN (CA)</b>\n\n` +
-      `Siga os passos para cadastrar um novo ativo para monitoramento.\n\n` +
-      `1️⃣ <b>Selecione a rede do token:</b>`;
+    const text = `💎 <b>FORJAR NOVO STATUS DE LOOT (CA)</b>\n\n` +
+      `Siga as instruções para cadastrar um novo ativo para monitoramento na arena.\n\n` +
+      `1️⃣ <b>Selecione o Setor da rede:</b>`;
     
     const buttons = [
-      [Markup.button.callback('🟡 Binance Smart Chain (BSC)', 'set_net_BSC')],
-      [Markup.button.callback('🟣 Polygon (MATIC)', 'set_net_POLYGON')],
-      [Markup.button.callback('❌ Cancelar', 'cancel_add')]
+      [Markup.button.callback('🟡 Setor BSC (Binance)', 'set_net_BSC')],
+      [Markup.button.callback('🟣 Setor Polygon (MATIC)', 'set_net_POLYGON')],
+      [Markup.button.callback('❌ Abortar Missão', 'cancel_add')]
     ];
 
     await ctx.replyWithHTML(text, Markup.inlineKeyboard(buttons));
@@ -36,9 +36,9 @@ const addTokenScene = new Scenes.WizardScene(
     if (!network) return ctx.reply('Por favor, selecione uma rede.');
 
     ctx.scene.session.state.network = network;
-    await ctx.answerCbQuery(`Rede: ${network}`);
+    await ctx.answerCbQuery(`Setor: ${network}`);
     
-    await ctx.replyWithHTML(`📝 <b>Rede ${network} selecionada.</b>\n\nEnvie agora o <b>Endereço do Contrato (CA)</b> do token:`);
+    await ctx.replyWithHTML(`📝 <b>Setor ${network} sintonizado.</b>\n\nEnvie agora o <b>Código do Contrato (CA)</b> do loot:`);
     return ctx.wizard.next();
   },
   async (ctx) => {
@@ -50,7 +50,7 @@ const addTokenScene = new Scenes.WizardScene(
     }
 
     const network = ctx.scene.session.state.network;
-    await ctx.reply(`🔍 Validando contrato na rede ${network}...`);
+    await ctx.reply(`🔍 Escaneando contrato no setor ${network}...`);
 
     try {
       // 1. Discover Token via Blockchain
@@ -74,12 +74,12 @@ const addTokenScene = new Scenes.WizardScene(
 
       ctx.scene.session.state.tokenData = { address, name, symbol, decimals, network };
 
-      const text = `✅ <b>Token Encontrado!</b>\n` +
-        `│ 🏷️ <b>Nome:</b> ${name}\n` +
-        `│ 💎 <b>Símbolo:</b> ${symbol}\n` +
+      const text = `✅ <b>Loot Identificado com Sucesso!</b>\n` +
+        `│ 🏷️ <b>Item:</b> ${name}\n` +
+        `│ 💎 <b>Gema:</b> ${symbol}\n` +
         `│ 🔢 <b>Decimais:</b> ${decimals}\n` +
-        `│ 🌐 <b>Rede:</b> ${network}\n\n` +
-        `Deseja confirmar o cadastro deste ativo?`;
+        `│ 🌐 <b>Setor:</b> ${network}\n\n` +
+        `Deseja confirmar o cadastro deste item no inventário?`;
 
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Confirmar Cadastro', 'confirm_save_token')],
@@ -104,8 +104,8 @@ const addTokenScene = new Scenes.WizardScene(
           create: { address, network, symbol, name, decimals }
         });
 
-        await ctx.answerCbQuery('Sucesso!');
-        await ctx.reply(`🚀 <b>Token ${symbol} adicionado!</b>\nO bot começará a coletar preços e você já pode configurar o motor para este par.`, { parse_mode: 'HTML' });
+        await ctx.answerCbQuery('Loot Adicionado!');
+        await ctx.reply(`🚀 <b>Item ${symbol} forjado com êxito!</b>\nO radar de gemas agora monitora este ativo. Já pode configurar seu motor.`, { parse_mode: 'HTML' });
         return ctx.scene.leave();
       } catch (err) {
         logger.error(`[TokenManager] Error saving token:`, err);

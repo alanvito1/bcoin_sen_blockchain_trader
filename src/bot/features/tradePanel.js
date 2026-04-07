@@ -52,7 +52,7 @@ const updateConfigScene = new Scenes.WizardScene(
   'UPDATE_CONFIG_SCENE',
   async (ctx) => {
     const { label } = ctx.scene.session.state;
-    await ctx.reply(`📝 <b>Ajustar ${label}:</b>\nEnvie o novo valor (numérico):`, { parse_mode: 'HTML' });
+    await ctx.reply(`🎮 <b>Tuning ${label}:</b>\nEnvie o novo nível (valor numérico):`, { parse_mode: 'HTML' });
     return ctx.wizard.next();
   },
   async (ctx) => {
@@ -119,7 +119,7 @@ async function tradePanelHandler(ctx) {
     include: { tradeConfigs: true, wallet: true },
   });
 
-  const text = '🎮 <b>Motores &gt; Selecionar Ativo</b>\nEscolha qual motor você deseja configurar ou ativar:';
+  const text = '🕹️ <b>Arena &gt; Selecionar Bomba</b>\nEscolha qual motor você deseja armar ou configurar:';
 
   const getBtnLabel = (network, token) => {
     const cfg = user.tradeConfigs.find(c => c.network === network && c.tokenPair.startsWith(token));
@@ -130,7 +130,7 @@ async function tradePanelHandler(ctx) {
     [Markup.button.callback(getBtnLabel('BSC', 'BCOIN'), 'manage_BSC_BCOIN'), Markup.button.callback(getBtnLabel('BSC', 'SEN'), 'manage_BSC_SEN')],
     [Markup.button.callback(getBtnLabel('POLYGON', 'BCOIN'), 'manage_POLYGON_BCOIN'), Markup.button.callback(getBtnLabel('POLYGON', 'SEN'), 'manage_POLYGON_SEN')],
     [Markup.button.callback('⚙️ Configurações de Logs', 'log_settings')],
-    [Markup.button.callback('⬅️ Voltar ao Terminal', 'start_panel')],
+    [Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')],
   ];
 
   if (ctx.callbackQuery) {
@@ -200,25 +200,25 @@ async function engineConfigHandler(ctx, network, token) {
   const rsiStr = config.rsiEnabled ? `RSI${config.rsiPeriod} ON` : 'RSI OFF';
 
   const text =
-    `⚙️ <b>Motores &gt; ${network} &gt; ${token}</b>\n` +
+    `💣 <b>Mina &gt; ${network} - ${token}</b>\n` +
     `🤖 <b>Status:</b> ${config.isOperating ? '🟢 EM OPERAÇÃO' : '🔴 PAUSADO'}\n\n` +
-    `💱 <b>Par:</b> <code>${config.tokenPair}</code>  Slippage: <code>${config.slippage}%</code>\n\n` +
-    `📊 <b>Estratégia A</b> [${tfA} | MA${config.maPeriodA}]:  <code>${config.buyAmountA}</code> Buy / <code>${config.sellAmountA}</code> Sell\n` +
-    `💎 <b>Estratégia B</b> [${tfB} | MA${config.maPeriodB}]:  <code>${config.buyAmountB}</code> Buy / <code>${config.sellAmountB}</code> Sell\n\n` +
-    `⏰ <b>Agendamento:</b> <code>${scheduleLabel}</code>\n` +
-    `🔀 <b>Motores:</b> <code>${stratLabel}</code>   📈 ${rsiStr}\n` +
+    `💱 <b>Par:</b> <code>${config.tokenPair}</code>  Precisão: <code>${config.slippage}%</code>\n\n` +
+    `🔥 <b>Explosivo A</b> [${tfA} | MA${config.maPeriodA}]:  <code>${config.buyAmountA}</code> Buy / <code>${config.sellAmountA}</code> Sell\n` +
+    `💥 <b>Explosivo B</b> [${tfB} | MA${config.maPeriodB}]:  <code>${config.buyAmountB}</code> Buy / <code>${config.sellAmountB}</code> Sell\n\n` +
+    `⏲️ <b>Timer:</b> <code>${scheduleLabel}</code>\n` +
+    `🔀 <b>Disparos:</b> <code>${stratLabel}</code>   📊 ${rsiStr}\n` +
     `🛡️ <b>Anti-Sandwich:</b> <code>${config.antiSandwichEnabled ? 'ATIVADO (Taxa extra)' : 'DESATIVADO (Padrão)'}</code>\n\n` +
-    `Escolha uma seção para configurar:`;
+    `Escolha uma seção para calibrar seu setup:`;
 
   const buttons = [
-    [Markup.button.callback(`📊 Estratégia A (${tfA})`, 'setup_strategy_a'), Markup.button.callback(`💎 Estratégia B (${tfB})`, 'setup_strategy_b')],
-    [Markup.button.callback('⏰ Agendamento', 'setup_schedule'), Markup.button.callback(`📉 Slippage: ${config.slippage}%`, 'edit_slippage')],
-    [Markup.button.callback(`📈 RSI: ${rsiStr}`, 'setup_rsi'), Markup.button.callback(`🛡️ MEV: ${config.antiSandwichEnabled ? 'ON' : 'OFF'}`, 'toggle_mev')],
-    [Markup.button.callback(`🔀 Motores: ${stratLabel}`, 'strategy_selector')],
+    [Markup.button.callback(`🔥 Explosivo A (${tfA})`, 'setup_strategy_a'), Markup.button.callback(`💥 Explosivo B (${tfB})`, 'setup_strategy_b')],
+    [Markup.button.callback('⏲️ Timer de Detonação', 'setup_schedule'), Markup.button.callback(`🎯 Precisão: ${config.slippage}%`, 'edit_slippage')],
+    [Markup.button.callback(`📊 RSI: ${rsiStr}`, 'setup_rsi'), Markup.button.callback(`🛡️ MEV: ${config.antiSandwichEnabled ? 'ON' : 'OFF'}`, 'toggle_mev')],
+    [Markup.button.callback(`🔀 Modos: ${stratLabel}`, 'strategy_selector')],
     [config.isOperating
-      ? Markup.button.callback('🔴 PAUSAR MOTOR', 'pause_bot')
-      : Markup.button.callback('🟢 INICIAR MOTOR', 'start_bot')],
-    [Markup.button.callback('⬅️ Voltar à Lista', 'trade_panel')],
+      ? Markup.button.callback('🔴 RECOLHER BOMBA', 'pause_bot')
+      : Markup.button.callback('🟢 PLANTAR BOMBA', 'start_bot')],
+    [Markup.button.callback('⬅️ Voltar à Arena', 'trade_panel')],
   ];
 
   return ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
@@ -232,9 +232,9 @@ async function setupStrategyAMenu(ctx) {
   const tfA = normalizeTF(config.timeframeA || '30m');
 
   const text =
-    `📊 <b>Motores &gt; ${config.network} &gt; ${config.tokenPair.split('/')[0]} &gt; Estratégia A</b>\n` +
+    `🔥 <b>Arena &gt; ${config.network} &gt; ${config.tokenPair.split('/')[0]} &gt; Explosivo A</b>\n` +
     `Status: <b>${config.strategy30m ? '🟢 Ativa' : '🔴 Inativa'}</b>  |  Timeframe: <code>${tfA}</code>  |  MA: <code>MA${config.maPeriodA}</code>\n\n` +
-    `Ajuste os parâmetros desta estratégia:`;
+    `Calibre o poder de fogo desta estratégia:`;
 
   const buttons = [
     [Markup.button.callback(`💰 Compra: ${config.buyAmountA} TOKENS`, 'edit_buyAmountA')],
@@ -254,9 +254,9 @@ async function setupStrategyBMenu(ctx) {
   const tfB = normalizeTF(config.timeframeB || '4h');
 
   const text =
-    `💎 <b>Motores &gt; ${config.network} &gt; ${config.tokenPair.split('/')[0]} &gt; Estratégia B</b>\n` +
+    `💥 <b>Arena &gt; ${config.network} &gt; ${config.tokenPair.split('/')[0]} &gt; Explosivo B</b>\n` +
     `Status: <b>${config.strategy4h ? '🟢 Ativa' : '🔴 Inativa'}</b>  |  Timeframe: <code>${tfB}</code>  |  MA: <code>MA${config.maPeriodB}</code>\n\n` +
-    `Ajuste os parâmetros desta estratégia:`;
+    `Calibre o poder de fogo desta estratégia:`;
 
   const buttons = [
     [Markup.button.callback(`💰 Compra: ${config.buyAmountB} TOKENS`, 'edit_buyAmountB')],
@@ -342,11 +342,10 @@ async function setupRsiMenu(ctx) {
   const token = config.tokenPair.split('/')[0];
 
   const text =
-    `📈 <b>Motores &gt; ${config.network} &gt; ${token} &gt; Configurar RSI</b>\n\n` +
-    `O RSI (Índice de Força Relativa) é usado como filtro de entrada:\n\n` +
-    `• <b>RSI &lt; 30</b> — Sobrevendido — Confirma sinal de COMPRA\n` +
-    `• <b>RSI &gt; 70</b> — Sobrecomprado — Confirma sinal de VENDA\n` +
-    `• RSI neutro — Sinal da MA prevalece sem filtro adicional\n\n` +
+    `📊 <b>Arena &gt; ${config.network} &gt; ${token} &gt; Sensor RSI</b>\n\n` +
+    `O RSI filtra suas bombas para explodirem apenas no timing certo:\n\n` +
+    `• <b>RSI &lt; 30</b> — Sobrevendido — Sinal de COMPRA\n` +
+    `• <b>RSI &gt; 70</b> — Sobrecomprado — Sinal de VENDA\n` +
     `Status: <b>${config.rsiEnabled ? '🟢 Ativado' : '🔴 Desativado'}</b>   Período: <code>${config.rsiEnabled ? `RSI${config.rsiPeriod}` : '--'}</code>`;
 
   const buttons = [
@@ -383,11 +382,11 @@ async function strategySelectorMenu(ctx) {
   const mark = (active) => active ? '✅' : '⬜';
 
   const text =
-    `🔀 <b>Motores &gt; ${config.network} &gt; ${token} &gt; Selecionar Estratégias</b>\n\n` +
-    `Escolha quais motores estarão <b>ativos</b> para este par.\n\n` +
-    `<b>Estratégia A (${tfA})</b> — Sinal de entrada principal.\n` +
-    `<b>Estratégia B (${tfB})</b> — Filtro de tendência de longo prazo.\n\n` +
-    `Com ambas ativas: o bot só opera quando A e B concordam.`;
+    `🔀 <b>Arena &gt; ${config.network} &gt; ${token} &gt; Modos de Disparo</b>\n\n` +
+    `Escolha qual combinação de explosivos será liberada.\n\n` +
+    `<b>Explosivo A (${tfA})</b> — Detonação de curto prazo.\n` +
+    `<b>Explosivo B (${tfB})</b> — Detonação de longo prazo.\n\n` +
+    `Combo (A+B): Bônus de precisão macro!`;
 
   const bothActive = config.strategy30m && config.strategy4h;
   const noneActive = !config.strategy30m && !config.strategy4h;
@@ -433,11 +432,11 @@ async function setupScheduleMenu(ctx) {
   const markMode = (m) => m === mode ? '✅' : '⬜';
 
   const text =
-    `⏰ <b>Motores &gt; ${config.network} &gt; ${token} &gt; Agendamento</b>\n\n` +
+    `⏲️ <b>Arena &gt; ${config.network} &gt; ${token} &gt; Timer de Detonação</b>\n\n` +
     `Modo atual: <b>${mode === 'interval' ? 'Intervalo Fixo' : 'Janelas Aleatórias'}</b>\n` +
     `Frequência: <code>${scheduleDesc}</code>\n\n` +
-    `<b>Janelas Aleatórias:</b> O bot sorteia minutos dentro de faixas configuradas. Mais discreto, simula comportamento humano.\n\n` +
-    `<b>Intervalo Fixo:</b> O bot executa exatamente a cada X minutos. Ideal para scalping ou maior controle de frequência.`;
+    `<b>Janelas Aleatórias:</b> Simula o drop de itens aleatórios. Mais discreto e seguro.\n\n` +
+    `<b>Intervalo Fixo:</b> Ideal para farm frenético. Explosões cronometradas.`;
 
   const presetRow1 = INTERVAL_PRESETS.slice(0, 5).map(([label, mins]) => {
     const active = config.intervalMinutes === mins && mode === 'interval';
@@ -609,11 +608,11 @@ async function logSettingsHandler(ctx) {
   const user = await prisma.user.findUnique({ where: { telegramId } });
 
   const text =
-    `⚙️ <b>Centro de Notificações</b>\n` +
-    `Defina quais logs você deseja receber no chat:\n\n` +
-    `📊 <b>Trades:</b> Notifica execuções (Compra/Venda)\n` +
-    `💰 <b>Saldos:</b> Notifica variações e resumos\n` +
-    '🛰️ <b>Passo a Passo:</b> Detalhes de cada etapa da operação';
+    `📡 <b>Painel de Logs da Missão</b>\n` +
+    `Defina quais dados táticos você deseja receber:\n\n` +
+    `📊 <b>Attacks:</b> Notifica execuções de bombas\n` +
+    `💰 <b>Loot:</b> Notifica variações de saldo no cofre\n` +
+    `🛰️ <b>Scan Mode:</b> Detalhes técnicos de cada frame da operação`;
 
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback(`${user.notifyTrades ? '🟢' : '🔴'} Notificar Trades`, 'toggle_notifyTrades')],

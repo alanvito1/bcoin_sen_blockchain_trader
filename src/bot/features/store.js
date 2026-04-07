@@ -4,22 +4,23 @@ const config = require('../../config');
 const priceService = require('../../services/priceService');
 const paymentService = require('../../services/paymentService');
 const balanceService = require('../../services/balanceService');
+const levelingService = require('../../services/levelingService');
 
 const PACKAGES = [
-  { id: 'p1', name: '🔋 1.000 Trades', price: 10, credits: 1000 },
-  { id: 'p2', name: '🔋 5.000 Trades', price: 40, credits: 5000 },
-  { id: 'mrr', name: '💎 Assinatura Mensal (Ilimitado)', price: 29, credits: 0, isSubscription: true }
+  { id: 'p1', name: '🔋 1.000 Fire-Charges', price: 10, credits: 1000 },
+  { id: 'p2', name: '🔋 5.000 Fire-Charges', price: 40, credits: 5000 },
+  { id: 'mrr', name: '💎 BOMB-PASS VIP (Infinita)', price: 29, credits: 0, isSubscription: true }
 ];
 
 async function storePanelHandler(ctx) {
-  const text = '🔋 <b>Loja Auto-Trader</b>\nRecarregue sua bateria para continuar operando sem interrupções.\n\nEscolha um pacote:';
+  const text = '🏪 <b>Item Shop: Batalha & Survival</b>\nAbasteça seu estoque de Fire-Charges para continuar detonando na arena.\n\nEscolha um power-up:';
   
   const buttons = PACKAGES.map(p => ([
     Markup.button.callback(`${p.name} - $${p.price}`, `buy_package_${p.id}`)
   ]));
   
-  buttons.push([Markup.button.callback('💳 Pagar com PIX/Cartão', 'onramp_flow')]);
-  buttons.push([Markup.button.callback('⬅️ Voltar', 'start_panel')]);
+  buttons.push([Markup.button.callback('💳 Pagar com PIX/Cartão (OnRamp)', 'onramp_flow')]);
+  buttons.push([Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]);
 
   const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -34,12 +35,12 @@ async function storePanelHandler(ctx) {
  * Step 2: Select Network
  */
 async function selectNetworkHandler(ctx, packageId) {
-  const text = `🌐 <b>Escolha a rede para o pagamento:</b>\nVocê pode pagar usando qualquer uma das redes abaixo:`;
+  const text = `🌐 <b>Escolha o Canal de Sync (Rede):</b>\nVocê pode pagar usando qualquer uma das infraestruturas abaixo:`;
   
   const buttons = [
-    [Markup.button.callback('🟣 Polygon (MATIC)', `select_asset_${packageId}_POLYGON`)],
-    [Markup.button.callback('🟡 Binance Smart Chain (BSC)', `select_asset_${packageId}_BSC`)],
-    [Markup.button.callback('⬅️ Voltar', 'store_panel')]
+    [Markup.button.callback('🟣 Polygon (Setor-MATIC)', `select_asset_${packageId}_POLYGON`)],
+    [Markup.button.callback('🟡 BSC (Setor-Binance)', `select_asset_${packageId}_BSC`)],
+    [Markup.button.callback('⬅️ Voltar à Loja', 'store_panel')]
   ];
 
   return ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
@@ -54,7 +55,7 @@ async function selectAssetHandler(ctx, packageId, network) {
   
   if (!user.wallet) return ctx.answerCbQuery('❌ Configure uma carteira primeiro!', { show_alert: true });
 
-  const text = `💳 <b>Escolha a moeda de pagamento:</b>\nRede Selecionada: <b>${network}</b>`;
+  const text = `💎 <b>Escolha as Gemas de Pagamento:</b>\nRede Selecionada: <b>${network}</b>`;
   
   const buttons = [
     [Markup.button.callback('💎 USDT', `confirm_checkout_${packageId}_${network}_USDT`)],
@@ -144,7 +145,7 @@ async function executePaymentHandler(ctx, packageId, network, assetName, amountT
     // Check balance on the ACTUAL SELECTED network
     const balances = await balanceService.checkBalances(user.wallet.publicAddress, network, tokenAddress);
     if (balances.tokenBalance < parseFloat(amountToPay)) {
-      throw new Error(`Saldo insuficiente na rede ${network} (${balances.tokenBalance} ${assetName}).`);
+      throw new Error(`Estoque de Gemas insuficiente no Setor ${network} (${balances.tokenBalance} ${assetName}).`);
     }
 
     // Determine if we can do an instant referral split
@@ -154,8 +155,9 @@ async function executePaymentHandler(ctx, packageId, network, assetName, amountT
     if (user.referredById) {
       const referrer = await prisma.user.findUnique({ where: { id: user.referredById } });
       if (referrer && referrer.referralPayoutAddress) {
-        // Calculate 10% commission
-        referralAmount = (parseFloat(amountToPay) * 0.10).toFixed(6);
+        // Use the referrer's dynamic commissionRate (e.g., 0.10, 0.15, etc.)
+        const rate = referrer.commissionRate || 0.10;
+        referralAmount = (parseFloat(amountToPay) * rate).toFixed(6);
         referralAddress = referrer.referralPayoutAddress;
       }
     }
@@ -179,17 +181,38 @@ async function executePaymentHandler(ctx, packageId, network, assetName, amountT
       await prisma.user.update({ where: { id: user.id }, data: { credits: { increment: pkg.credits } } });
     }
 
-    // Update Lifetime Earnings (Statistical)
+    // Update Lifetime Earnings & RPG Progress (XP/Level)
     if (user.referredById && referralAddress && referralAmount) {
       try {
         const assetField = `referralBalance${assetName}`; // USDT, BCOIN, or SEN
+        
+        // 1. Update Lifetime Stats
         await prisma.user.update({
           where: { id: user.referredById },
           data: { [assetField]: { increment: parseFloat(referralAmount) } }
         });
-        console.log(`[Referral] Instant payout successful. Credited lifetime stats: ${referralAmount} ${assetName} for referrer ${user.referredById}`);
+
+        // 2. Add XP and check Level Up (1 XP = 1 USD commission)
+        // We need the USD value of the commission
+        const price = lastQuote.price;
+        const commissionUSD = parseFloat(referralAmount) * price;
+        
+        const rpgResult = await levelingService.addXpAndCheckLevelUp(
+          user.referredById,
+          commissionUSD,
+          user.id,
+          assetName,
+          txHash
+        );
+
+        console.log(`[Referral] Instant payout successful. XP Added: ${commissionUSD.toFixed(2)}. New XP: ${rpgResult.totalXp}`);
+        
+        if (rpgResult.levelUp) {
+          // Notify referrer about Level Up via Bot if possible (out of scope for now, just log)
+          console.log(`[Referral] PLAYER LEVEL UP! User ${user.referredById} reached Level ${rpgResult.newLevel}`);
+        }
       } catch (refError) {
-        console.error(`[Referral] Failed to update lifetime stats:`, refError);
+        console.error(`[Referral] Failed to update RPG stats:`, refError);
       }
     }
 
@@ -208,16 +231,16 @@ async function onrampFlowHandler(ctx) {
   const telegramId = BigInt(ctx.from.id);
   const user = await prisma.user.findUnique({ where: { telegramId }, include: { wallet: true } });
   
-  const text = `💳 <b>Compra de Criptomoedas (PIX/Cartão)</b>\n\n` +
-    `O bot <u>não possui</u> custódia do seu dinheiro. O abastecimento da sua carteira deve ser feito por <b>sua conta</b> em plataformas externas reconhecidas.\n\n` +
-    `1️⃣ <b>Copie seu endereço abaixo:</b>\n` +
-    `<code>${user.wallet?.publicAddress || '⚠️ Gere uma carteira primeiro'}</code>\n\n` +
-    `2️⃣ <b>Acesse um local confiável para comprar:</b>\n` +
-    `Recomendamos usar o sistema <b>P2P ou Compre Cripto</b> das seguintes corretoras:\n\n` +
-    `• <b>Binance:</b> Maior do mundo, aceita PIX.\n` +
-    `• <b>Bybit:</b> Ótima liquidez e taxas baixas.\n` +
-    `• <b>OKX:</b> Interface simples e segura.\n\n` +
-    `<i>Após comprar, envie os ativos para o endereço que você copiou acima.</i>`;
+  const text = `💳 <b>Depósito de Créditos Externos (OnRamp)</b>\n\n` +
+    `O bot <u>não possui</u> custódia do seu dinheiro real. O abastecimento do inventário deve ser feito por <b>sua conta</b> em plataformas externas.\n\n` +
+    `1️⃣ <b>Copie seu endereço de destino:</b>\n` +
+    `<code>${user.wallet?.publicAddress || '⚠️ Gere um cofre primeiro'}</code>\n\n` +
+    `2️⃣ <b>Acesse um terminal de câmbio confiável:</b>\n` +
+    `Recomendamos usar o sistema <b>P2P ou Compre Cripto</b> destas exchanges:\n\n` +
+    `• <b>Binance:</b> Aceita PIX 24/7.\n` +
+    `• <b>Bybit:</b> Baixas taxas mundiais.\n` +
+    `• <b>OKX:</b> Segurança nível Arcade-Boss.\n\n` +
+    `<i>Após a compra, envie as gemas para o endereço do seu inventário acima.</i>`;
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.url('🟡 Comprar na Binance (PIX)', 'https://p2p.binance.com/pt-BR')],

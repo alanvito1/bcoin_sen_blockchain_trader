@@ -2,6 +2,7 @@ const { Markup, Scenes } = require('telegraf');
 const prisma = require('../../config/prisma');
 const { isAddress } = require('ethers');
 const priceService = require('../../services/priceService');
+const levelingService = require('../../services/levelingService');
 
 /**
  * Main Referral Dashboard for Users
@@ -32,26 +33,30 @@ async function referralPanelHandler(ctx) {
                   (user.referralBalanceBCOIN * priceBCOIN) + 
                   (user.referralBalanceSEN * priceSEN);
 
-  const threshold = 10.0; // Payout was previously at $10. Now instant.
+  // RPG Progression Display
+  const nextLevel = levelingService.getNextLevelInfo(user.level);
+  const progressText = nextLevel 
+    ? generateProgressBar(user.xp, nextLevel.xpThreshold)
+    : '<code>[MAX LEVEL REACHED]</code>';
 
-  const text = `🎁 <b>INDIQUE E GANHE (10%)</b>\n\n` +
-    `Receba <b>10% de Cashback/Comissão</b> sobre todas as cargas de bateria e assinaturas realizadas pelos seus indicados!\n\n` +
-    `📈 <b>Seu Histórico de Ganhos Globais:</b>\n` +
-    `│ 👥 <b>Indicados:</b> <code>${totalReferred}</code>\n` +
-    `│ 💵 <b>Total Recebido (On-Chain):</b>\n` +
-    `│   • <code>${user.referralBalanceUSDT.toFixed(2)} USDT</code>\n` +
-    `│   • <code>${user.referralBalanceBCOIN.toFixed(2)} BCOIN</code>\n` +
-    `│   • <code>${user.referralBalanceSEN.toFixed(2)} SEN</code>\n` +
-    `│ 💰 <b>Estimativa Global em USD:</b> <code>$${totalUSD.toFixed(2)} USD</code>\n\n` +
-    `⚡ <b>PAGAMENTOS INSTANTÂNEOS</b>\n` +
-    `Sua comissão não fica retida no bot! Assim que seu indicado realizar um pagamento, seus 10% vão diretamente para a carteira cadastrada abaixo na mesma hora e na mesma moeda.\n\n` +
-    `│ 🏦 <b>Carteira de Recebimento:</b> ${payoutDisplay}\n\n` +
-    `🔗 <b>Seu Link de Convite:</b>\n` +
+  const text = `🎁 <b>MULTIPLAYER: PLAYER 2 & REWARDS</b>\n\n` +
+    `👾 <b>Seu Status:</b> Level <code>${user.level}</code>\n` +
+    `💰 <b>Sua Comissão:</b> <code>${(user.commissionRate * 100).toFixed(1)}%</code>\n` +
+    `📈 <b>Progresso de XP:</b>\n${progressText}\n\n` +
+    `Ganhe bônus sobre todas as Energy Packs e Passes adquiridos pelos seus recrutas!\n\n` +
+    `📊 <b>Seu Baú de Ganhos:</b>\n` +
+    `│ 👥 <b>Recrutados:</b> <code>${totalReferred}</code>\n` +
+    `│ 💵 <b>Loot Total (Estimado):</b> <code>$${totalUSD.toFixed(2)} USD</code>\n\n` +
+    `⚡ <b>RECOMPENSAS INSTANTÂNEAS</b>\n` +
+    `Gemas enviadas direto para o cofre externo via Split On-Chain.\n` +
+    `│ 🏦 <b>Cofre Alvo:</b> ${payoutDisplay}\n\n` +
+    `🔗 <b>Link de Convite (Spawn Point):</b>\n` +
     `<code>${referralLink}</code>`;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🏦 Configurar Carteira de Recebimento', 'setup_referral_payout')],
-    [Markup.button.callback('⬅️ Voltar ao Terminal', 'start_panel')]
+    [Markup.button.callback('📜 Histórico de Loot', 'view_loot_history')],
+    [Markup.button.callback('🏦 Configurar Cofre de Payout', 'setup_referral_payout')],
+    [Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]
   ]);
 
   if (ctx.callbackQuery) {
@@ -60,17 +65,59 @@ async function referralPanelHandler(ctx) {
   return ctx.replyWithHTML(text, keyboard);
 }
 
+function generateProgressBar(current, target) {
+  const percent = Math.min(Math.floor((current / target) * 100), 100);
+  const size = 10;
+  const filled = Math.floor((percent / 100) * size);
+  const empty = size - filled;
+  const bar = '█'.repeat(filled) + '░'.repeat(empty);
+  return `<code>[${bar}]</code> ${percent}% (${current.toFixed(1)}/${target} XP)`;
+}
+
+/**
+ * Shows the last 5 commission logs
+ */
+async function showLootHistoryHandler(ctx) {
+  const telegramId = BigInt(ctx.from.id);
+  const user = await prisma.user.findUnique({ where: { telegramId } });
+  
+  const logs = await prisma.commissionLog.findMany({
+    where: { referrerId: user.id },
+    orderBy: { createdAt: 'desc' },
+    take: 5
+  });
+
+  let text = `📜 <b>HISTÓRICO DE LOOT RECENTE</b>\n\n`;
+
+  if (logs.length === 0) {
+    text += `<i>Nenhuma recompensa recebida ainda. Comece a recrutar players!</i>`;
+  } else {
+    for (const log of logs) {
+      const date = log.createdAt.toLocaleDateString('pt-BR');
+      text += `📅 ${date} | 💰 +$${log.commission.toFixed(2)} ${log.asset}\n` +
+              `🔗 <a href="https://polygonscan.com/tx/${log.txHash}">Ver Transação</a>\n` +
+              `────────────────────\n`;
+    }
+  }
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('⬅️ Voltar', 'referral_panel')]
+  ]);
+
+  return ctx.editMessageText(text, { parse_mode: 'HTML', disable_web_page_preview: true, ...keyboard });
+}
+
 /**
  * Scene for setting up the external payout address
  */
 const setupPayoutAddressScene = new Scenes.BaseScene('SETUP_PAYOUT_ADDRESS');
 
 setupPayoutAddressScene.enter((ctx) => {
-  const text = `🛡️ <b>CONFIGURAÇÃO DE RECEBIMENTO</b>\n\n` +
-    `Você receberá suas comissões <b>exatamente na mesma moeda e rede</b> em que seu indicado realizar a compra (Ex: se ele pagar em USDT na Polygon, você receberá USDT na Polygon; se pagar BCOIN na BSC, você recebe BCOIN na BSC).\n\n` +
-    `Por isso, solicite ou cadastre um <b>Endereço Externo (MetaMask, TrustWallet)</b> que consiga receber tokens <u>tanto da rede Polygon quanto da BSC</u> no mesmo endereço.\n\n` +
-    `⚠️ <b>ATENÇÃO:</b> Não utilize a carteira (Burn Wallet) gerada internamente pelo bot para receber lucros a longo prazo.\n\n` +
-    `Envie no chat agora o seu <b>Endereço (começando com 0x...)</b> seguro:`;
+  const text = `🛡️ <b>CONFIGURAÇÃO DE RECOMPENSAS</b>\n\n` +
+    `Você receberá suas gemas <b>exatamente na mesma infraestrutura</b> (Rede e Ativo) que seu recruta utilizar.\n\n` +
+    `Cadastre um <b>Cofre Externo (MetaMask, TrustWallet)</b> que consiga receber tokens <u>tanto da rede Polygon quanto da BSC</u> no mesmo endereço.\n\n` +
+    `⚠️ <b>AVISO DO BOSS:</b> Não utilize a carteira interna do bot para acumular seu lucro global.\n\n` +
+    `Envie no chat agora o seu <b>Endereço Seguro</b> (começando com 0x...):`;
     
   ctx.replyWithHTML(text, Markup.inlineKeyboard([Markup.button.callback('❌ Cancelar', 'cancel_scene')]));
 });
@@ -102,5 +149,6 @@ setupPayoutAddressScene.action('cancel_scene', async (ctx) => {
 
 module.exports = {
   referralPanelHandler,
+  showLootHistoryHandler,
   setupPayoutAddressScene
 };

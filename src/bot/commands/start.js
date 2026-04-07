@@ -57,8 +57,8 @@ async function startHandler(ctx) {
   // --- TERMS GATE ---
   if (!user.hasAcceptedTerms) {
     const termsKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✅ Aceitar e Prosseguir', 'accept_terms')],
-      [Markup.button.callback('❌ Recusar', 'refuse_terms')]
+      [Markup.button.callback('✅ ACEITAR E JOGAR', 'accept_terms')],
+      [Markup.button.callback('❌ DESISTIR', 'refuse_terms')]
     ]);
 
     if (ctx.callbackQuery) {
@@ -91,25 +91,25 @@ async function startHandler(ctx) {
     return `│ ${status} <code>${label}</code> : C:${cfg.buyAmountA} / V:${cfg.sellAmountA}`;
   };
 
-  const welcomeText = `🛰️ <b>SISTEMA DE TRADING MULTI-CHAIN</b>\n` +
-    `Status: <b>ON-LINE</b> | Usuário: <code>${firstName}</code>\n\n` +
-    `┌── <b>[ STATUS DA CONTA ]</b>\n` +
-    `│ 🔌 <b>Carteira:</b> ${walletDisplay}\n` +
-    `│ 🔋 <b>Bateria:</b> ${creditsDisplay}\n` +
-    `└── 📡 <b>Rede:</b> <code>Polygon / BSC (Mainnet)</code>\n\n` +
-    `┌── <b>[ MOTORES DE EXECUÇÃO ]</b>\n` +
+  const welcomeText = `👾 <b>BOMBER TRADER: STAGE 1</b> 🕹️\n` +
+    `Status: <b>BATTLE READY</b> | Player: <code>${firstName}</code>\n\n` +
+    `┌── <b>[ STATUS DO PLAYER ]</b>\n` +
+    `│ 🎒 <b>Inventário:</b> ${walletDisplay}\n` +
+    `│ 🔋 <b>Energy:</b> ${creditsDisplay}\n` +
+    `└── 📡 <b>Server:</b> <code>Polygon / BSC (Mainnet)</code>\n\n` +
+    `┌── <b>[ MOTORES DE EXPLOSÃO ]</b>\n` +
     `${getEngineLine('BSC', 'BCOIN')}\n` +
     `${getEngineLine('BSC', 'SEN')}\n` +
     `│\n` +
     `${getEngineLine('POLYGON', 'BCOIN')}\n` +
     `${getEngineLine('POLYGON', 'SEN')}\n` +
-    `└── ⚙️ <i>Configure cada motor no painel abaixo:</i>`;
+    `└── ⚙️ <i>Ajuste seu "Firepower" no painel abaixo:</i>`;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🎮 Painel de Controle', 'trade_panel'), Markup.button.callback('💳 Carteira', 'wallet_panel')],
-    [Markup.button.callback('💎 Loja de Créditos', 'store_panel'), Markup.button.callback('🛠️ Ferramentas DeFi', 'tools_panel')],
-    [Markup.button.callback('🎁 Indique e Ganhe', 'referral_panel')],
-    [Markup.button.callback('📖 Guia do Usuário', 'quick_guide'), Markup.button.callback('🛠️ Central de Ajuda', 'support_link')]
+    [Markup.button.callback('🕹️ Arena de Trade (Bombas)', 'trade_panel'), Markup.button.callback('🎒 Meu Inventário', 'wallet_panel')],
+    [Markup.button.callback('🏪 Item Shop', 'store_panel'), Markup.button.callback('🛠️ Power-ups', 'tools_panel')],
+    [Markup.button.callback('🎁 Multiplayer (Convite)', 'referral_panel')],
+    [Markup.button.callback('📖 Manual do Jogo', 'quick_guide'), Markup.button.callback('🛠️ Suporte Técnico', 'support_link')]
   ]);
 
   if (ctx.callbackQuery) {
