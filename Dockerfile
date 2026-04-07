@@ -1,19 +1,30 @@
-FROM node:22-alpine
+# Phase 3: Optimized Production Engine
+FROM node:20-alpine
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-RUN npm install
+# Install system dependencies (Prisma needs openssl)
+RUN apk add --no-cache openssl
 
-# Copy application code
+# Copy package files first to leverage Docker layer caching
+COPY package*.json ./
+
+# Install ONLY production dependencies
+RUN npm ci --omit=dev
+
+# Copy application source and configuration
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma Client
 RUN npx prisma generate
 
-# Expose port (if needed for API, although bot is long-polling)
+# Healthcheck: Ping DB and Redis every 30s
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node src/health.js
+
+# Expose port (Internal Bot UI / Health)
 EXPOSE 3000
 
-# default command (to be overriden in docker-compose for specific services)
-CMD ["node", "index.js"]
+# Start with migration sync and bot engine
+CMD ["npm", "run", "start:prod"]

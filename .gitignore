@@ -75,12 +75,21 @@ node_modules/
 .env.test
 .env.production
 .env.*.local
+*.env
 *.local
 *.key
 *.pem
 *.cert
 *.pfx
 *.p12
+
+# Backups and Archives
+*.tar.gz
+*.zip
+
+# Legacy and Backups
+legacy/
+backup/
 
 # Database
 *.db

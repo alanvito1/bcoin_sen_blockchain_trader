@@ -1,13 +1,17 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const cron = require('node-cron');
 const prisma = require('../config/prisma');
 const { sendUserNotification } = require('../bot/notifier');
 const paymentService = require('../services/paymentService');
 
+const logger = require('../utils/logger');
+
 /**
  * Billing Cron: Runs daily to check for expiring subscriptions.
  */
 const billingCron = cron.schedule('0 10 * * *', async () => {
-  console.log('[BillingCron] Running daily subscription check...');
+  logger.info('[BillingCron] Running daily subscription check...');
 
   try {
     const today = new Date();
@@ -36,7 +40,7 @@ const billingCron = cron.schedule('0 10 * * *', async () => {
     // and attempt auto-billing using paymentService.processCheckout.
 
   } catch (error) {
-    console.error('[BillingCron] Error:', error);
+    logger.error('[BillingCron] Error:', error);
   }
 });
 

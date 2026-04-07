@@ -6,6 +6,9 @@
  * @module worker/tradeExecutor
  */
 
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
 const { Worker } = require('bullmq');
 const { Wallet, JsonRpcProvider } = require('ethers');
 const prisma = require('../config/prisma');
@@ -60,7 +63,7 @@ const NATIVE_WRAPPED = {
  */
 async function processTradeJob(job) {
   const { userId, tradeConfigId, walletId } = job.data;
-  console.log(`[TradeExecutor] Processing job for user: ${userId}`);
+  logger.info(`[TradeExecutor] Processing job for user: ${userId}`);
 
   let wallet = null; // Defined in upper scope for secure nulling in 'finally' block
 
@@ -73,7 +76,7 @@ async function processTradeJob(job) {
     ]);
 
     if (!user || !config || !walletData || !config.isOperating) {
-      return console.log(`[TradeExecutor] User ${userId} or config not available/active.`);
+      return logger.info(`[TradeExecutor] User ${userId} or config not available/active.`);
     }
 
     const verbose = user.notifySteps;
@@ -88,7 +91,7 @@ async function processTradeJob(job) {
       if (verbose) {
         await sendUserNotification(user.telegramId, `📊 <b>Status:</b> Ciclo concluído. Recomendação: <b>HOLD</b> (Aguardar).\n<i>Motivo: ${result.reason}</i>`, 'info', 'STEP');
       }
-      return console.log(`[TradeExecutor] Signal: HOLD for ${userId}. Reason: ${result.reason}`);
+      return logger.info(`[TradeExecutor] Signal: HOLD for ${userId}. Reason: ${result.reason}`);
     }
 
     // 3. Execution Parameters
@@ -100,7 +103,7 @@ async function processTradeJob(job) {
       executionAmount = result.signal === 'BUY' ? config.buyAmountB : config.sellAmountB;
     }
 
-    console.log(`[TradeExecutor] Using strategy ${result.strategyUsed} parameters. Amount: ${executionAmount}`);
+    logger.info(`[TradeExecutor] Using strategy ${result.strategyUsed} parameters. Amount: ${executionAmount}`);
 
     // 4. Security: Decrypt PK (Private Key exists ONLY in this local scope)
     const privateKey = encryption.decrypt({
@@ -126,7 +129,7 @@ async function processTradeJob(job) {
     }
     
     if (isDryRun) {
-      console.log(`[TradeExecutor] DRY RUN ENABLED. Skipping real balance check for ${userId}.`);
+      logger.info(`[TradeExecutor] DRY RUN ENABLED. Skipping real balance check for ${userId}.`);
     } else {
       const balances = await balanceService.checkBalances(walletData.publicAddress, config.network);
       if (!balances.hasEnoughGas) {
@@ -157,11 +160,11 @@ async function processTradeJob(job) {
     let gasUsed = '0.001';
 
     if (isDryRun) {
-      console.log(`[TradeExecutor] DRY RUN: EXECUTING MOCK ${result.signal} for ${userId} @ ${result.price}`);
+      logger.info(`[TradeExecutor] DRY RUN: EXECUTING MOCK ${result.signal} for ${userId} @ ${result.price}`);
       txHash = `DRY_RUN_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
       await new Promise(resolve => setTimeout(resolve, 2000));
     } else {
-      console.log(`[TradeExecutor] EXECUTING REAL ${result.signal} for ${userId} @ ${result.price} (Amount: ${executionAmount})`);
+      logger.info(`[TradeExecutor] EXECUTING REAL ${result.signal} for ${userId} @ ${result.price} (Amount: ${executionAmount})`);
       
       const direction = result.signal.toLowerCase();
       const swapResult = await swapper.swapToken(
@@ -202,30 +205,51 @@ async function processTradeJob(job) {
     await billingService.consumeCredit(userId, txHash);
 
     // Final Notifications
-    const explorerUrl = `${globalConfig.networks[netKey].explorerUrl}/tx/${txHash}`;
+    const networkBase = globalConfig.networks[netKey];
+    const explorerUrl = `${networkBase.explorerUrl}/tx/${txHash}`;
 
     await sendUserNotification(user.telegramId, 
       `✅ <b>Trade Executado!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount}\nTx: <a href="${explorerUrl}">Explorer</a>`, 
       'success'
     );
 
-    console.log(`[TradeExecutor] Trade success for ${userId}. Hash: ${txHash}`);
+    logger.info(`[TradeExecutor] Trade success for ${userId}. Hash: ${txHash}`);
 
-  } catch (error) {
-    console.error(`[TradeExecutor] Failed trade for ${userId}:`, error.message);
-    
-    // Automatic pause on zero balance (Insuficient Gas)
-    if (error.message.includes('gas') || error.message.includes('insufficient')) {
-      const userToNotify = await prisma.user.findUnique({ where: { id: userId } });
-      if (userToNotify) {
-        await prisma.tradeConfig.update({
-          where: { id: tradeConfigId },
-          data: { isOperating: false }
-        });
-        await sendUserNotification(userToNotify.telegramId, '🚨 Seu robô foi pausado por falta de saldo para taxas.', 'error');
+    // 8. Asset Management (Transfer surplus to TARGET_ADDRESS for SEN token)
+    if (config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
+      const { ethers: ethersObj } = require('ethers');
+      const SEN_ADDRESS = networkBase.tokens.find(t => t.symbol === 'SEN')?.address;
+      if (SEN_ADDRESS) {
+        const senContract = new ethersObj.Contract(SEN_ADDRESS, [
+          'function balanceOf(address) view returns (uint256)',
+          'function transfer(address, uint256) returns (bool)'
+        ], wallet);
+        
+        try {
+          const finalSen = await senContract.balanceOf(wallet.address);
+          if (finalSen > ethersObj.parseEther("1000")) {
+            const surplus = finalSen - ethersObj.parseEther("1000");
+            logger.info(`[TradeExecutor] Asset Management: Surplus of ${ethersObj.formatEther(surplus)} SEN detected for user ${userId}.`);
+            
+            if (isDryRun) {
+              logger.info(`[TradeExecutor] [DRY RUN] Would transfer ${ethersObj.formatEther(surplus)} SEN to ${process.env.TARGET_ADDRESS}`);
+            } else {
+              logger.info(`[TradeExecutor] Transferring surplus to ${process.env.TARGET_ADDRESS}...`);
+              const txTransfer = await senContract.transfer(process.env.TARGET_ADDRESS, surplus);
+              await txTransfer.wait();
+              logger.info(`[TradeExecutor] Transfer successful. Tx: ${txTransfer.hash}`);
+            }
+          }
+        } catch (assetErr) {
+          logger.error(`[TradeExecutor] Asset Management Error:`, assetErr);
+        }
       }
     }
 
+  } catch (error) {
+    logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}:`, error);
+
+    // Record failure in history
     await prisma.tradeHistory.create({
       data: {
         userId,
@@ -236,9 +260,20 @@ async function processTradeJob(job) {
         feeUsed: 0,
         errorMessage: error.message
       }
-    });
+    }).catch(e => logger.error('[TradeExecutor] DB recording error:', e));
+
+    // Pause on specific errors like balance (Original logic)
+    if (error.message.includes('gas') || error.message.includes('insufficient')) {
+      await prisma.tradeConfig.update({
+        where: { id: tradeConfigId },
+        data: { isOperating: false }
+      }).catch(() => {});
+    }
+
+    // Proactively throw the error so BullMQ can handle retries
+    throw error;
+
   } finally {
-    // 8. Wipe Sensitive references from memory
     wallet = null;
   }
 }
@@ -247,10 +282,31 @@ async function processTradeJob(job) {
  * Worker instance that listens to 'tradeQueue'.
  */
 const tradeExecutor = new Worker('tradeQueue', processTradeJob, {
-  connection: redisConnection
+  connection: redisConnection,
+  concurrency: 50, // Added concurrency for scale
 });
 
-console.log('[TradeExecutor] Multi-tenant executor worker started.');
+// Listener for DLQ (Dead Letter Queue) - Triggered when all attempts fail
+tradeExecutor.on('failed', async (job, err) => {
+  if (job.attemptsMade >= (job.opts?.attempts || 1)) {
+    logger.error(`[TradeExecutor] Job ${job.id} PERMANENTLY FAILED after ${job.attemptsMade} attempts.`);
+    
+    // Dispatch to NotificationQueue
+    const { Queue } = require('bullmq');
+    const notificationQueue = new Queue('notificationQueue', { connection: redisConnection });
+    
+    await notificationQueue.add('criticalAlert', {
+      type: 'CRITICAL_ALERT',
+      payload: {
+        jobName: job.name,
+        userId: job.data.userId,
+        error: err.message
+      }
+    }).catch(qe => logger.error('[TradeExecutor] DLQ Alert dispatch failed:', qe));
+  }
+});
+
+logger.info('[TradeExecutor] Multi-tenant executor worker started with concurrency: 50.');
 
 module.exports = {
     tradeExecutor,

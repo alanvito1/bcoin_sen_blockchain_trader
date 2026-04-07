@@ -8,6 +8,7 @@
 
 const config = require('../config');
 const prisma = require('../config/prisma');
+const logger = require('../utils/logger');
 
 /**
  * Valid timeframe strings accepted across the system.
@@ -107,15 +108,15 @@ async function fetchCandles(symbol, interval, limit = 100) {
             const latestTick = ticks[0].timestamp;
             const threshold = Math.max(1000 * 60 * 10, 1000 * 60 * minutesNeeded * 2);
             
-            if ((Date.now() - latestTick.getTime()) < threshold) {
-                console.log(`[Strategy] ${symbol} | Using Cache (${candles.length} candles from ${ticks.length} ticks)`);
-                return candles.reverse().slice(-limit);
-            }
+                if ((Date.now() - latestTick.getTime()) < threshold) {
+                    logger.info(`[Strategy] ${symbol} | Using Cache (${candles.length} candles from ${ticks.length} ticks)`);
+                    return candles.reverse().slice(-limit);
+                }
         }
         
-        console.warn(`[Strategy] ${symbol} | DB Data stale or insufficient (${ticks.length}/${totalTicksNeeded} ticks). HOLD advised.`);
+        logger.warn(`[Strategy] ${symbol} | DB Data stale or insufficient (${ticks.length}/${totalTicksNeeded} ticks). HOLD advised.`);
     } catch (dbErr) {
-        console.error(`[Strategy] CRITICAL: DB Error fetching ticks: ${dbErr.message}`);
+        logger.error(`[Strategy] CRITICAL: DB Error fetching ticks: ${dbErr.message}`);
     }
 
     return []; // Return empty if no data, logic will HOLD.
@@ -143,10 +144,14 @@ async function getSignal(tokenPair, tradeConfig) {
     const maB = calculateMA(candlesB, sB.maPeriod);
     const rsiValue = tradeConfig?.rsiEnabled ? calculateRSI(candlesA, tradeConfig.rsiPeriod || 14) : null;
 
+    if (!candlesA || candlesA.length < 2) {
+      return { signal: 'HOLD', reason: 'Dados insuficientes no banco local. Aguardando sincronização de preços.' };
+    }
+
     const lastPrice = candlesA[candlesA.length - 1].close;
     const prevPrice = candlesA[candlesA.length - 2].close;
 
-    console.log(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(30m): ${maA?.toFixed(6)} | 📈 MA(4h): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED (Bypassing filter)'}`);
+    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(30m): ${maA?.toFixed(6)} | 📈 MA(4h): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED (Bypassing filter)'}`);
 
     let signal = 'HOLD';
     let reason = 'Análise técnica concluída: Sem sinal claro de compra/venda.';
@@ -172,7 +177,7 @@ async function getSignal(tokenPair, tradeConfig) {
 
     return { signal, reason, price: lastPrice, strategyUsed };
   } catch (error) {
-    console.error(`[Strategy] Error calculating signal for ${tokenPair}:`, error.message);
+    logger.error(`[Strategy] Error calculating signal for ${tokenPair}:`, error.message);
     return { signal: 'HOLD', reason: 'Erro técnico no cálculo.' };
   }
 }

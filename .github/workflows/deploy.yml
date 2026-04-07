@@ -1,0 +1,67 @@
+# =============================================================================
+#  🚀 Auto-Deploy Pipeline — Blockchain Trader
+#  Triggered on push to `main`. Connects via SSH and deploys via Docker.
+# =============================================================================
+
+name: 🚀 Deploy to Production VPS
+
+on:
+  push:
+    branches:
+      - main
+
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🏗️ Build & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📋 Log Deploy Info
+        run: |
+          echo "🔄 Deploying commit: ${{ github.sha }}"
+          echo "👤 Triggered by: ${{ github.actor }}"
+          echo "📅 Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: 🔐 SSH into VPS & Deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          timeout: 120s
+          command_timeout: 300s
+          script: |
+            set -e
+
+            echo "========================================="
+            echo "🚀 Blockchain Trader — Auto Deploy"
+            echo "========================================="
+
+            # Navigate to project directory
+            cd ${{ secrets.PROJECT_PATH || '/root/blockchain-trader' }}
+
+            echo "📥 Pulling latest changes from main..."
+            git fetch origin main
+            git checkout main
+            git pull origin main
+
+            echo "🏗️ Building production image..."
+            ./deploy.sh build
+
+            echo "🚀 Starting containers..."
+            ./deploy.sh up
+
+            echo "⏳ Waiting 15s for containers to stabilize..."
+            sleep 15
+
+            echo "📊 Container status:"
+            ./deploy.sh status
+
+            echo "========================================="
+            echo "✅ Deploy completed successfully!"
+            echo "========================================="

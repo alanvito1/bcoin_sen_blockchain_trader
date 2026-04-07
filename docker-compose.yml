@@ -1,41 +1,61 @@
-version: '3.3'
+version: '3.8'
 
 services:
   db:
     image: postgres:15-alpine
     container_name: trader-db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: autotrader
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-autotrader}
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-autotrader}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: trader-redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6380:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   bot-engine:
     build: .
     container_name: trader-engine
     restart: always
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - .env
-    command: sh -c "npx prisma migrate deploy && node index.js"
+    volumes:
+      - ./logs:/app/logs
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/autotrader?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-autotrader}?schema=public
       - REDIS_URL=redis://redis:6379
+    # Healthcheck is defined in Dockerfile, but we can override or re-assert here
+    healthcheck:
+      test: ["CMD", "node", "src/health.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   pgdata:

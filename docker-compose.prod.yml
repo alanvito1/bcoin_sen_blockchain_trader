@@ -1,20 +1,27 @@
-version: '3'
+version: '3.8'
 
 services:
   bot-engine:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: trader-engine
     restart: always
     env_file:
       - .env
-    command: sh -c "npx prisma migrate deploy && node index.js"
+    volumes:
+      - ./logs:/app/logs
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD", "node", "src/health.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
-volumes:
-  # Volumes are not strictly needed here as we use external DB/Redis, 
-  # but keeping the structure for future persistence needs (like file logs).
-  logdata:
+# Important Note: This file assumes external DB/Redis or that they are managed separately.
+# For a full stack on one VPS, use the main docker-compose.yml.

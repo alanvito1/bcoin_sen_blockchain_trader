@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 // BigInt JSON global patch (Prisma needs this)
 BigInt.prototype.toJSON = function () {
   return this.toString();

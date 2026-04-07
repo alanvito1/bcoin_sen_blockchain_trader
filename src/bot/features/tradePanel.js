@@ -670,7 +670,7 @@ module.exports = {
   setTimeframe,
   setupRsiMenu,
   toggleRsi,
-  setupScheduleMode,
+  setupScheduleMenu,
   setScheduleMode,
   setIntervalPreset,
   toggleMev,

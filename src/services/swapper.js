@@ -356,12 +356,12 @@ async function getBalances(networkName) {
   const network = config.networks[networkName];
   const netColor = networkName === 'bsc' ? logger.colors.yellow : logger.colors.magenta;
   
-  console.log(`\n  ${netColor}• ${networkName.toUpperCase()}${logger.colors.reset}`);
+  logger.info(`\n  ${netColor}• ${networkName.toUpperCase()}${logger.colors.reset}`);
   
   try {
     const nativeBalance = await withRPCRetry(() => wallet.provider.getBalance(wallet.address), networkName);
     const nativeSymbol = networkName === 'polygon' ? 'POL' : 'BNB';
-    console.log(`    ${logger.colors.gray}├─${logger.colors.reset} Native (${nativeSymbol}): ${logger.colors.white}${ethers.formatEther(nativeBalance)}${logger.colors.reset}`);
+    logger.info(`    ${logger.colors.gray}├─${logger.colors.reset} Native (${nativeSymbol}): ${logger.colors.white}${ethers.formatEther(nativeBalance)}${logger.colors.reset}`);
 
     for (const token of network.tokens) {
       if (token.symbol === 'USDT') continue;
@@ -370,21 +370,20 @@ async function getBalances(networkName) {
       const formatted = ethers.formatUnits(tBalance, token.decimals);
       const isPositive = parseFloat(formatted) > 0;
       const color = isPositive ? logger.colors.green : logger.colors.gray;
-      console.log(`    ${logger.colors.gray}├─${logger.colors.reset} ${token.symbol}: ${color}${formatted}${logger.colors.reset}`);
+      logger.info(`    ${logger.colors.gray}├─${logger.colors.reset} ${token.symbol}: ${color}${formatted}${logger.colors.reset}`);
     }
 
-    // USDT Check
-    const usdtToken = network.tokens.find(t => t.symbol === 'USDT');
-    if (usdtToken) {
-      const uContract = new ethers.Contract(usdtToken.address, ERC20_ABI, wallet);
-      const uBalance = await withRPCRetry(() => uContract.balanceOf(wallet.address), networkName);
-      const uFormatted = ethers.formatUnits(uBalance, usdtToken.decimals);
-      const uColor = parseFloat(uFormatted) > 0 ? logger.colors.green : logger.colors.gray;
-      console.log(`    ${logger.colors.gray}└─${logger.colors.reset} USDT: ${uColor}${uFormatted}${logger.colors.reset}`);
-    }
-  } catch (error) {
-    logger.error(`Erro ao buscar saldos: ${error.message}`);
+  const usdtToken = network.tokens.find(t => t.symbol === 'USDT');
+  if (usdtToken) {
+    const uContract = new ethers.Contract(usdtToken.address, ERC20_ABI, wallet);
+    const uBalance = await withRPCRetry(() => uContract.balanceOf(wallet.address), networkName);
+    const uFormatted = ethers.formatUnits(uBalance, usdtToken.decimals);
+    const uColor = parseFloat(uFormatted) > 0 ? logger.colors.green : logger.colors.gray;
+    logger.info(`    ${logger.colors.gray}└─${logger.colors.reset} USDT: ${uColor}${uFormatted}${logger.colors.reset}`);
   }
+} catch (error) {
+  logger.error(`Erro ao buscar saldos: ${error.message}`);
+}
 }
 
 module.exports = {

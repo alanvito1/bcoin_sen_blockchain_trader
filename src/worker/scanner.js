@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const cron = require('node-cron');
 const prisma = require('../config/prisma');
 const { tradeQueue } = require('../config/queue');
@@ -91,11 +93,11 @@ const scannerTask = cron.schedule('* * * * *', async () => {
     
     // If it's a known Prisma error, logging the meta helps a lot
     if (error.code) {
-      console.error(`[Scanner] Prisma Error Code: ${error.code}`);
+      logger.error(`[Scanner] Prisma Error Code: ${error.code}`);
     }
   }
 });
 
-console.log('[Scanner] Multi-tenant scanner started (every 1 minute).');
+logger.info('[Scanner] Multi-tenant scanner started (every 1 minute).');
 
 module.exports = scannerTask;

@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { sendUserNotification } = require('../bot/notifier');
+const logger = require('../utils/logger');
 
 /**
  * Consumes one credit from the user and pauses the bot if balance reaches zero.
@@ -18,7 +19,7 @@ async function consumeCredit(userId, txHash) {
   const hasActiveSubscription = user.subscriptionExpiresAt && user.subscriptionExpiresAt > new Date();
 
   if (hasActiveSubscription) {
-    console.log(`[Billing] User ${userId} has active subscription. No credit deducted.`);
+    logger.info(`[Billing] User ${userId} has active subscription. No credit deducted.`);
     return;
   }
 
@@ -39,7 +40,7 @@ async function consumeCredit(userId, txHash) {
       `🔋 <b>Sua bateria acabou!</b> O robô foi pausado para proteger seu capital. Recarregue na /loja para continuar operando.`, 
       'warning'
     );
-    console.log(`[Billing] Kill switch triggered for user ${userId}. Bot paused.`);
+    logger.info(`[Billing] Kill switch triggered for user ${userId}. Bot paused.`);
   }
 }
 

@@ -8,6 +8,9 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+const cron = require('node-cron');
 const axios = require('axios');
 const prisma = new PrismaClient();
 const logger = require('../utils/logger');
@@ -68,4 +71,9 @@ async function runLoop() {
 runLoop();
 setInterval(runLoop, 60000);
 
-console.log('[PriceFetcher] Decentralized Market Data collector started.');
+logger.info('[PriceFetcher] Decentralized Market Data collector started.');
+
+module.exports = {
+  runLoop,
+  fetchPrice
+};
