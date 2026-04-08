@@ -3,8 +3,8 @@ const fs = require('fs');
 
 console.log('--- DIAGNOSTIC START ---');
 try {
-  console.log('Attempting to require ./src/bot/index...');
-  const bot = require('./src/bot/index');
+  console.log('Attempting to require ./bot/index...');
+  const bot = require('./bot/index');
   console.log('✅ Success! Bot loaded.');
 } catch (e) {
   console.error('❌ FAILED to load bot.');
