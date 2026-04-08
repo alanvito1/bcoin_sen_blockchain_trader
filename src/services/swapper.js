@@ -259,29 +259,15 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
         : ethers.parseUnits(fairOutNum.toString(), 18);
       
       amountOutMin = (fairOut * (10000n - BigInt(Math.floor(dynamicTolerance * 100)))) / 10000n;
-
-      if (impact > 20) { // 'Agressivo': Hard guard only at 20% (extreme sandwich/low liq)
-        logger.error(`[${networkName}] 🥪 IMPACTO EXTREMO (Sandwich?): Impacto detectado: ${impact.toFixed(2)}%. Abortando.`);
-        if (!config.strategy.dryRun) return { status: 0, error: `Extreme Price Impact: ${impact.toFixed(2)}%` };
-      } else if (impact > 10) {
-        logger.warn(`[${networkName}] Impacto de preço alto (${impact.toFixed(2)}%). Prosseguindo em modo AGRESSIVO.`);
-      }
-
-
-      // Final Check: If the DEX pool expected output is ALREADY below our fair price floor, abort before sending.
-      if (expectedOut < amountOutMin) {
-        logger.error(`[${networkName}] ❌ Preço Indisponível: Pool DEX (${expectedOutNum.toFixed(4)}) abaixo do Piso de Segurança (${ethers.formatUnits(amountOutMin, isNativeOut ? 18 : tokenConfig.decimals)}).`);
-        if (!config.strategy.dryRun) return { status: 0, error: 'DEX Pool price below safety floor' };
-      }
-
     } else {
       // Legacy fallback if no marketPrice provided (not recommended)
       const slippageBps = BigInt(Math.floor((tokenConfig.slippage || config.slippage || 1.0) * 100));
       amountOutMin = (expectedOut * (10000n - slippageBps)) / 10000n;
     }
 
+    const isDryRun = tokenConfig.isDryRun === true;
 
-    if (config.strategy.dryRun) {
+    if (isDryRun) {
       logger.info(`${logger.colors.yellow}[DRY RUN] Simulação OK: ${amountInFormatted} ➔ ${ethers.formatUnits(amountOutMin, direction === 'buy' ? tokenConfig.decimals : 18)} output min.${logger.colors.reset}`);
       return { status: 1, hash: '0x' + 'd'.repeat(64), isDryRun: true };
     }

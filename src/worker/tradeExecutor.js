@@ -123,13 +123,13 @@ async function processTradeJob(job) {
     wallet = new Wallet(privateKey, provider);
     
     // 5. Pre-trade Balance Check
-    const isDryRun = process.env.DRY_RUN === 'true';
+    const isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
     if (verbose) {
       await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '💰 '}<b>Passo 2/4:</b> Verificando saldo e taxas na rede <code>${config.network}</code>...`, 'info', 'STEP');
     }
     
     if (isDryRun) {
-      logger.info(`[TradeExecutor] DRY RUN ENABLED. Skipping real balance check for ${userId}.`);
+      logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
     } else {
       const balances = await balanceService.checkBalances(walletData.publicAddress, config.network);
       if (!balances.hasEnoughGas) {
@@ -145,14 +145,15 @@ async function processTradeJob(job) {
       throw new Error(`Token configuration not found for symbol: ${tokenSymbol}`);
     }
 
-    // Include the user's MEV/Anti-Sandwich preference in the swap command
+    // Include parameters in the swap command
     const tokenConfigWithParams = { 
       ...tokenConfig, 
       antiSandwich: !!config.antiSandwichEnabled,
-      slippage: config.slippage 
+      slippage: config.slippage,
+      isDryRun: isDryRun
     };
 
-    // 6. Execute Swap (Real execution with Routing & Anti-Sandwich)
+    // 6. Execute Swap
     if (verbose) {
       await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '🚀 '}<b>Passo 3/4:</b> ${isDryRun ? 'Simulando envio de transação...' : 'Enviando transação de ' + result.signal + ' para a pool...'}`, 'info', 'STEP');
     }
@@ -163,7 +164,7 @@ async function processTradeJob(job) {
     if (isDryRun) {
       logger.info(`[TradeExecutor] DRY RUN: EXECUTING MOCK ${result.signal} for ${userId} @ ${result.price}`);
       txHash = `DRY_RUN_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
     } else {
       logger.info(`[TradeExecutor] EXECUTING REAL ${result.signal} for ${userId} @ ${result.price} (Amount: ${executionAmount})`);
       
@@ -208,13 +209,14 @@ async function processTradeJob(job) {
     // Final Notifications
     const networkBase = globalConfig.networks[netKey];
     const explorerUrl = `${networkBase.explorerUrl}/tx/${txHash}`;
+    
+    const notificationText = isDryRun
+      ? `💥 <b>[DRY RUN] Detonação Simulada:</b> ${result.signal === 'BUY' ? 'Compra' : 'Venda'} de <b>${executionAmount} ${tokenSymbol}</b> executada virtualmente!\n<i>Par: ${config.tokenPair} | Preço: ${result.price}</i>`
+      : `✅ <b>Trade Executado!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount}\nTx: <a href="${explorerUrl}">Explorer</a>`;
 
-    await sendUserNotification(user.telegramId, 
-      `✅ <b>Trade Executado!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount}\nTx: <a href="${explorerUrl}">Explorer</a>`, 
-      'success'
-    );
+    await sendUserNotification(user.telegramId, notificationText, 'success');
 
-    logger.info(`[TradeExecutor] Trade success for ${userId}. Hash: ${txHash}`);
+    logger.info(`[TradeExecutor] Trade ${isDryRun ? 'Simulation' : 'Realized'} for ${userId}. Hash: ${txHash}`);
 
     // 8. Asset Management (Transfer surplus to TARGET_ADDRESS for SEN token)
     if (config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
