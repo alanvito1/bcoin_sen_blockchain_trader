@@ -2,7 +2,7 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const prisma = require('../src/config/prisma');
 const { Queue } = require('bullmq');
-const redisConnection = require('../config/redis');
+const redisConnection = require('../src/config/redis');
 const dotenv = require('dotenv');
 const path = require('path');
 
