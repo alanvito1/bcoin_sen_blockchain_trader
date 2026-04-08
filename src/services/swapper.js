@@ -249,7 +249,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       }
 
       const impact = (1 - (expectedOutNum / fairOutNum)) * 100;
-      const userSlippage = config.slippage || 1.0;
+      const userSlippage = tokenConfig.slippage || config.slippage || 1.0;
       // 'Agressivo': Use a higher dynamic floor if the user set it low
       const dynamicTolerance = Math.max(userSlippage, 10.0); // 10% tolerance for aggressive mode
 
@@ -276,7 +276,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
     } else {
       // Legacy fallback if no marketPrice provided (not recommended)
-      const slippageBps = BigInt(Math.floor((config.slippage || 1.0) * 100));
+      const slippageBps = BigInt(Math.floor((tokenConfig.slippage || config.slippage || 1.0) * 100));
       amountOutMin = (expectedOut * (10000n - slippageBps)) / 10000n;
     }
 

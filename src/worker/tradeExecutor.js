@@ -146,9 +146,10 @@ async function processTradeJob(job) {
     }
 
     // Include the user's MEV/Anti-Sandwich preference in the swap command
-    const tokenConfigWithAntiSandwich = { 
+    const tokenConfigWithParams = { 
       ...tokenConfig, 
-      antiSandwich: !!config.antiSandwichEnabled 
+      antiSandwich: !!config.antiSandwichEnabled,
+      slippage: config.slippage 
     };
 
     // 6. Execute Swap (Real execution with Routing & Anti-Sandwich)
@@ -169,7 +170,7 @@ async function processTradeJob(job) {
       const direction = result.signal.toLowerCase();
       const swapResult = await swapper.swapToken(
           netKey, 
-          tokenConfigWithAntiSandwich, 
+          tokenConfigWithParams, 
           direction, 
           executionAmount, 
           'token', 

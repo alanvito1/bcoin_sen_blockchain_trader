@@ -135,13 +135,19 @@ async function getSignal(tokenPair, tradeConfig) {
     const sA = config.strategy.strategyA;
     const sB = config.strategy.strategyB;
 
+    // Use User Config if available, fallback to Global Config
+    const tfA = tradeConfig?.timeframeA || sA.timeframe.toString();
+    const tfB = tradeConfig?.timeframeB || sB.timeframe.toString();
+    const maPeriodA = tradeConfig?.maPeriodA || sA.maPeriod;
+    const maPeriodB = tradeConfig?.maPeriodB || sB.maPeriod;
+
     const [candlesA, candlesB] = await Promise.all([
-      fetchCandles(symbol, sA.timeframe.toString()),
-      fetchCandles(symbol, sB.timeframe.toString())
+      fetchCandles(symbol, tfA),
+      fetchCandles(symbol, tfB)
     ]);
 
-    const maA = calculateMA(candlesA, sA.maPeriod);
-    const maB = calculateMA(candlesB, sB.maPeriod);
+    const maA = calculateMA(candlesA, maPeriodA);
+    const maB = calculateMA(candlesB, maPeriodB);
     const rsiValue = tradeConfig?.rsiEnabled ? calculateRSI(candlesA, tradeConfig.rsiPeriod || 14) : null;
 
     if (!candlesA || candlesA.length < 2) {
@@ -151,7 +157,7 @@ async function getSignal(tokenPair, tradeConfig) {
     const lastPrice = candlesA[candlesA.length - 1].close;
     const prevPrice = candlesA[candlesA.length - 2].close;
 
-    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(30m): ${maA?.toFixed(6)} | 📈 MA(4h): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED (Bypassing filter)'}`);
+    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(${tfA}): ${maA?.toFixed(6)} | 📈 MA(${tfB}): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED (Bypassing filter)'}`);
 
     let signal = 'HOLD';
     let reason = 'Análise técnica concluída: Sem sinal claro de compra/venda.';
@@ -163,14 +169,14 @@ async function getSignal(tokenPair, tradeConfig) {
       const rsiConfirm = !tradeConfig?.rsiEnabled || rsiValue < 30;
       if (tradeConfig?.strategy30m && (!tradeConfig?.strategy4h || trendUp) && rsiConfirm) {
         signal = 'BUY';
-        reason = `Cruzou ABAIXO da MA${sA.maPeriod} (Fundo). Tendência de Alta em 4h Confirmada.`;
+        reason = `Cruzou ABAIXO da MA${maPeriodA} (Fundo). Tendência de Alta em ${tfB} Confirmada.`;
         strategyUsed = 'A';
       }
     } else if (prevPrice <= maA && lastPrice > maA) {
       const rsiConfirm = !tradeConfig?.rsiEnabled || rsiValue > 70;
       if (tradeConfig?.strategy30m && rsiConfirm) {
         signal = 'SELL';
-        reason = `Cruzou ACIMA da MA${sA.maPeriod} (Topo). Realizando Lucro.`;
+        reason = `Cruzou ACIMA da MA${maPeriodA} (Topo). Realizando Lucro.`;
         strategyUsed = 'A';
       }
     }
@@ -183,5 +189,6 @@ async function getSignal(tokenPair, tradeConfig) {
 }
 
 module.exports = {
-  getSignal
+  getSignal,
+  TIMEFRAME_MAP
 };
