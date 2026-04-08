@@ -1,7 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
-const { Telegraf, Scenes, Markup } = require('telegraf');
-const { session } = require('@telegraf/session');
+// Use built-in session from telegraf or fix the import
+const { Telegraf, Scenes, Markup, session } = require('telegraf');
 
 // 1. Core Services
 const prisma = require('../config/prisma');
