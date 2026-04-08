@@ -1,40 +1,32 @@
-console.log('[DEBUG] >>> INDEX.JS BOOTSTRAP START');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+const { Telegraf, Scenes, session, Markup } = require('telegraf');
+
+// 1. Core Services
+const prisma = require('../config/prisma');
+const logger = require('../utils/logger');
+
+console.log('[DEBUG] >>> BOT ENGINE INITIALIZING...');
+
 let bot;
 
 try {
-  const { Telegraf, Scenes, session, Markup } = require('telegraf');
-  const prisma = require('../config/prisma');
-  require('dotenv').config();
-
-  // INITIALIZE BOT IMMEDIATELY
-  console.log('[INIT] Instantiating Telegraf...');
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  console.log(`[INIT] Token present: ${!!token} (Length: ${token ? token.length : 0})`);
-  
-  if (!token) {
-    throw new Error('TELEGRAM_BOT_TOKEN is missing from environment variables!');
-  }
-  
-  bot = new Telegraf(token);
-
-  console.log('[INIT] Loading Middleware & Store...');
+  // 2. Load Middlewares
   const { telemetryMiddleware } = require('./middleware/telemetry');
   const rateLimit = require('./middleware/rateLimit');
   const sessionStore = require('./sessionStore');
 
-  console.log('[INIT] Loading handlers & scenes...');
+  // 3. Load Feature Handlers & Scenes
   const startHandler = require('./commands/start');
-
-  const walletFeatures = require('./features/wallet');
   const { 
     walletPanelHandler, 
     generateWalletHandler, 
     importWalletScene, 
     disconnectWalletScene,
-    viewPrivateKeyHandler
-  } = walletFeatures;
+    viewPrivateKeyHandler,
+    disconnectConfirmHandler 
+  } = require('./features/wallet');
 
-  const tradePanelFeatures = require('./features/tradePanel');
   const {
     tradePanelHandler,
     engineConfigHandler,
@@ -75,9 +67,17 @@ try {
     setSellAmountB,
     tradeStatsHandler,
     resetStatsHandler,
-  } = tradePanelFeatures;
+  } = require('./features/tradePanel');
 
-  const { storePanelHandler, selectNetworkHandler, selectAssetHandler, confirmCheckoutHandler, executePaymentHandler, onrampFlowHandler } = require('./features/store');
+  const { 
+    storePanelHandler, 
+    selectNetworkHandler, 
+    selectAssetHandler, 
+    confirmCheckoutHandler, 
+    executePaymentHandler, 
+    onrampFlowHandler 
+  } = require('./features/store');
+
   const { addTokenScene } = require('./features/tokenManager');
   const { statusHandler, historyHandler } = require('./features/status');
 
@@ -92,9 +92,17 @@ try {
   const { supportPanelHandler, reportIssueHandler } = require('./features/support');
   const { toolsPanelHandler, gasPriceHandler, priceListHandler, securityToolHandler } = require('./features/tools');
   const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
-  
-  // 3. Define Stage with all Scenes
-  console.log('[INIT] Initializing Scenes Stage...');
+
+  // 4. Initialization Logic
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    throw new Error('CRITICAL: TELEGRAM_BOT_TOKEN is missing from environment!');
+  }
+
+  bot = new Telegraf(token);
+  console.log('[INIT] Telegraf instantiated successfully.');
+
+  // 5. Scenes Stage setup
   const stage = new Scenes.Stage([
     importWalletScene,
     disconnectWalletScene,
@@ -103,307 +111,110 @@ try {
     setupPayoutAddressScene
   ]);
 
-  // 4. Apply Middleware in Order
-  console.log('[INIT] Registering Global Middlewares...');
-  
-  // 1. Telemetry (First!)
+  // 6. Apply Middlewares
   bot.use(telemetryMiddleware);
-
-  // 2. Session (Prisma Store)
   bot.use(session({ 
     store: sessionStore,
     getSessionKey: (ctx) => ctx.from && ctx.chat && `${ctx.from.id}:${ctx.chat.id}`
   }));
-
-  // 3. Rate Limit
   bot.use(rateLimit);
-
-  // 4. Scenes Stage
   bot.use(stage.middleware());
 
-  console.log('[INIT] Middleware registration complete.');
+  console.log('[INIT] Middleware registered.');
 
-// 2. Commands & Actions Registration with Safety (Fase 1.1)
-const register = (type, trigger, handler) => {
+  // 7. Command Registration Helper
+  const register = (type, trigger, handler) => {
     if (typeof handler !== 'function') {
-        console.error(`[INIT] CRITICAL ERROR: Handler for ${type}('${trigger}') is ${typeof handler}!`);
-        // We throw here purposefully to see the stack trace if needed, 
-        // but now we know WHICH trigger failed.
-        throw new Error(`Handler for ${trigger} is undefined`);
+      throw new Error(`[INIT] Handler for ${type}('${trigger}') is ${typeof handler}!`);
     }
     if (type === 'command') bot.command(trigger, handler);
     if (type === 'action') bot.action(trigger, handler);
-};
+  };
 
-console.log('[INIT] Registering Commands...');
-register('command', 'start', startHandler);
-register('command', 'add', (ctx) => ctx.scene.enter('ADD_TOKEN_SCENE'));
-register('command', 'loja', storePanelHandler);
-register('command', 'wallet', walletPanelHandler);
-register('command', 'carteira', walletPanelHandler);
-register('command', 'referral', referralPanelHandler);
-register('command', 'indicacao', referralPanelHandler);
-register('command', 'status', statusHandler);
-register('command', 'historico', historyHandler);
-register('command', 'ajuda', supportPanelHandler);
-register('command', 'cancel', async (ctx) => {
-  await ctx.scene.leave();
-  return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');
-});
+  // 8. Register Commands
+  console.log('[INIT] Registering Routes...');
+  register('command', 'start', startHandler);
+  register('command', 'add', (ctx) => ctx.scene.enter('ADD_TOKEN_SCENE'));
+  register('command', 'loja', storePanelHandler);
+  register('command', 'wallet', walletPanelHandler);
+  register('command', 'carteira', walletPanelHandler);
+  register('command', 'referral', referralPanelHandler);
+  register('command', 'indicacao', referralPanelHandler);
+  register('command', 'status', statusHandler);
+  register('command', 'historico', historyHandler);
+  register('command', 'ajuda', supportPanelHandler);
+  register('command', 'cancel', async (ctx) => {
+    await ctx.scene.leave();
+    return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');
+  });
 
-console.log('[INIT] Registering Actions...');
-register('action', 'start_panel', startHandler);
-register('action', 'wallet_panel', walletPanelHandler);
-register('action', 'trade_panel', tradePanelHandler);
-register('action', 'store_panel', storePanelHandler);
-register('action', 'onramp_flow', onrampFlowHandler);
+  // Actions
+  register('action', 'start_panel', startHandler);
+  register('action', 'wallet_panel', walletPanelHandler);
+  register('action', 'trade_panel', tradePanelHandler);
+  register('action', 'store_panel', storePanelHandler);
+  register('action', 'onramp_flow', onrampFlowHandler);
+  register('action', 'setup_strategy_a', setupStrategyAMenu);
+  register('action', 'setup_strategy_b', setupStrategyBMenu);
+  register('action', 'setup_windows', setupWindowsMenu);
+  register('action', 'setup_pair_menu', setupPairMenu);
+  
+  bot.action('generate_wallet', generateWalletHandler);
+  bot.action('import_wallet', (ctx) => ctx.scene.enter('IMPORT_WALLET_SCENE'));
+  bot.action('disconnect_wallet_confirm', disconnectConfirmHandler);
+  bot.action('view_private_key', viewPrivateKeyHandler);
+  bot.action('disconnect_wallet_force', (ctx) => ctx.scene.enter('DISCONNECT_WALLET_SCENE'));
+  
+  // Multi-engine / Generic Actions
+  bot.action(/^manage_(.+)_(.+)$/, (ctx) => engineConfigHandler(ctx, ctx.match[1], ctx.match[2]));
+  bot.action('update_pair', selectPairHandler);
+  bot.action(/^set_pair_(.+)$/, (ctx) => setPairHandler(ctx, ctx.match[1]));
+  bot.action('start_bot', startBotHandler);
+  bot.action('pause_bot', stopBotHandler);
+  
+  // Terms & Admin
+  bot.action('accept_terms', async (ctx) => {
+    await prisma.user.update({ where: { telegramId: BigInt(ctx.from.id) }, data: { hasAcceptedTerms: true } });
+    await ctx.answerCbQuery('✅ Termos aceitos!');
+    return startHandler(ctx);
+  });
+  
+  bot.action('admin_panel', adminHandler);
+  bot.action(/^buy_package_(.+)$/, (ctx) => selectNetworkHandler(ctx, ctx.match[1]));
 
-// Sub-menus
-register('action', 'setup_strategy_a', setupStrategyAMenu);
-register('action', 'setup_strategy_b', setupStrategyBMenu);
-register('action', 'setup_windows', setupWindowsMenu);
-register('action', 'setup_pair_menu', setupPairMenu);
-register('action', 'manage_engine', async (ctx) => {
-  const cfg = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
-  return engineConfigHandler(ctx, cfg.network, cfg.tokenPair.split('/')[0]);
-});
+  // Global Error Catch
+  bot.catch((err, ctx) => {
+    logger.error(`[Telegraf] Error for ${ctx.updateType}:`, err);
+    try {
+      return ctx.replyWithHTML('❌ <b>Ocorreu um erro inesperado.</b> Tente novamente em alguns instantes.');
+    } catch (e) {
+      logger.error('[Telegraf] Silent failure in error reporter:', e);
+    }
+  });
 
-// Multi-Engine Selection
-bot.action(/^manage_(.+)_(.+)$/, (ctx) => engineConfigHandler(ctx, ctx.match[1], ctx.match[2]));
-
-// Generic Config Editors
-const configFields = {
-  edit_buyAmountA:      { field: 'buyAmountA',      label: 'Compra Estrategia A' },
-  edit_sellAmountA:     { field: 'sellAmountA',     label: 'Venda Estrategia A' },
-  edit_buyAmountB:      { field: 'buyAmountB',      label: 'Compra Estrategia B' },
-  edit_sellAmountB:     { field: 'sellAmountB',     label: 'Venda Estrategia B' },
-  edit_window1Min:      { field: 'window1Min',      label: 'Janela 1 (Inicio)' },
-  edit_window1Max:      { field: 'window1Max',      label: 'Janela 1 (Fim)' },
-  edit_window2Min:      { field: 'window2Min',      label: 'Janela 2 (Inicio)' },
-  edit_window2Max:      { field: 'window2Max',      label: 'Janela 2 (Fim)' },
-  edit_maPeriodA:       { field: 'maPeriodA',       label: 'Periodo MA - Estrategia A' },
-  edit_maPeriodB:       { field: 'maPeriodB',       label: 'Periodo MA - Estrategia B' },
-  edit_rsiPeriod:       { field: 'rsiPeriod',       label: 'Periodo RSI' },
-  edit_intervalMinutes: { field: 'intervalMinutes', label: 'Intervalo de execucao (minutos)' },
-};
-
-Object.entries(configFields).forEach(([action, info]) => {
-  bot.action(action, (ctx) => {
-    ctx.scene.enter('UPDATE_CONFIG_SCENE', { 
-      field: info.field, 
-      label: info.label,
-      engineId: ctx.session.selectedEngineId
+  // 9. Launch
+  console.log('[INIT] Launching Bot...');
+  bot.launch()
+    .then(() => {
+      console.log('🚀 [SUCCESS] Bot Arena Bomberman is LIVE!');
+      logger.info('Bot started successfully');
+    })
+    .catch((err) => {
+      console.error('❌ CRITICAL: Launch Failure:', err);
+      process.exit(1);
     });
-  });
-});
-
-bot.action('generate_wallet', async (ctx) => {
-  try {
-    await generateWalletHandler(ctx);
-  } catch (err) {
-    ctx.reply('❌ Erro ao gerar carteira: ' + err.message);
-  }
-});
-
-bot.action('import_wallet', (ctx) => ctx.scene.enter('IMPORT_WALLET_SCENE'));
-bot.action('disconnect_wallet_confirm', disconnectConfirmHandler);
-bot.action('view_private_key', viewPrivateKeyHandler);
-bot.action('disconnect_wallet_force', (ctx) => ctx.scene.enter('DISCONNECT_WALLET_SCENE'));
-
-bot.action('update_slippage', (ctx) => {
-  ctx.scene.enter('UPDATE_CONFIG_SCENE', { field: 'slippage', label: 'Slippage', engineId: ctx.session.selectedEngineId });
-});
-
-bot.action('edit_slippage', (ctx) => {
-  ctx.scene.enter('UPDATE_CONFIG_SCENE', { field: 'slippage', label: 'Slippage', engineId: ctx.session.selectedEngineId });
-});
-
-bot.action('update_pair', selectPairHandler);
-bot.action(/^set_pair_(.+)$/, (ctx) => setPairHandler(ctx, ctx.match[1]));
-
-bot.action('start_bot', startBotHandler);
-bot.action('pause_bot', stopBotHandler);
-
-
-// Handled in stopBotHandler
-
-// Multi-engine doesn't need a single toggle anymore
-
-bot.action('log_settings', logSettingsHandler);
-bot.action('toggle_notifyTrades', (ctx) => toggleLogPreference(ctx, 'notifyTrades'));
-bot.action('toggle_notifyBalances', (ctx) => toggleLogPreference(ctx, 'notifyBalances'));
-bot.action('toggle_notifySteps', (ctx) => toggleLogPreference(ctx, 'notifySteps'));
-
-// Strategy Selector
-bot.action('strategy_selector',  strategySelectorMenu);
-bot.action('set_strategy_none',  (ctx) => setStrategyPreset(ctx, false, false));
-bot.action('set_strategy_30m',   (ctx) => setStrategyPreset(ctx, true,  false));
-bot.action('set_strategy_4h',    (ctx) => setStrategyPreset(ctx, false, true));
-bot.action('set_strategy_both',  (ctx) => setStrategyPreset(ctx, true,  true));
-
-// Timeframe Selectors
-bot.action('select_tf_a', timeframeSelectorA);
-bot.action('select_tf_b', timeframeSelectorB);
-const VALID_TFS = ['5m', '15m', '30m', '1h', '4h', '1d', '1w'];
-VALID_TFS.forEach(tf => {
-  bot.action(`set_tf_a_${tf}`, (ctx) => setTimeframe(ctx, 'timeframeA', tf, timeframeSelectorA));
-  bot.action(`set_tf_b_${tf}`, (ctx) => setTimeframe(ctx, 'timeframeB', tf, timeframeSelectorB));
-});
-
-// RSI & MEV
-bot.action('setup_rsi',  setupRsiMenu);
-bot.action('toggle_rsi', toggleRsi);
-bot.action('toggle_mev', toggleMev);
-
-// Schedule Mode
-bot.action('setup_schedule',       setupScheduleMenu);
-bot.action('set_schedule_window',  (ctx) => setScheduleMode(ctx, 'window'));
-bot.action('set_schedule_interval',(ctx) => setScheduleMode(ctx, 'interval'));
-bot.action('noop',                 (ctx) => ctx.answerCbQuery());
-const INTERVAL_PRESETS = [5, 15, 30, 60, 120, 240, 360, 720, 1440];
-INTERVAL_PRESETS.forEach(mins => {
-  bot.action(`set_interval_${mins}`, (ctx) => setIntervalPreset(ctx, mins));
-});
-
-bot.action('accept_terms', async (ctx) => {
-  const telegramId = BigInt(ctx.from.id);
-  await prisma.user.update({
-    where: { telegramId },
-    data: { hasAcceptedTerms: true }
-  });
-  await ctx.answerCbQuery('✅ Termos aceitos!');
-  return startHandler(ctx);
-});
-
-bot.action('refuse_terms', async (ctx) => {
-  await ctx.answerCbQuery('❌ Termos recusados.');
-  const text = `<b>Ok! Entendemos sua escolha.</b>\n\nCaso mude de ideia e queira utilizar o bot aceitando os termos e riscos, basta digitar /start novamente a qualquer momento.\n\n<i>Até logo!</i>`;
-  return ctx.editMessageText(text, { parse_mode: 'HTML' });
-});
-
-// Admin Tools Actions
-bot.action('admin_panel', adminHandler);
-bot.action('admin_tools', adminToolsHandler);
-bot.action('admin_clear_stuck_polygon', (ctx) => clearStuckHandler(ctx, 'POLYGON'));
-bot.action('admin_clear_stuck_bsc', (ctx) => clearStuckHandler(ctx, 'BSC'));
-bot.action('admin_db_health', dbHealthHandler);
-bot.action('admin_status', adminStatusHandler);
-
-bot.action(/^buy_package_(.+)$/, (ctx) => selectNetworkHandler(ctx, ctx.match[1]));
-bot.action(/^select_asset_(.+)_(.+)$/, (ctx) => selectAssetHandler(ctx, ctx.match[1], ctx.match[2]));
-bot.action(/^confirm_checkout_(.+)_(.+)_(.+)$/, (ctx) => confirmCheckoutHandler(ctx, ctx.match[1], ctx.match[2], ctx.match[3]));
-bot.action(/^execute_payment_(.+)_(.+)_(.+)_(.+)$/, (ctx) => executePaymentHandler(ctx, ctx.match[1], ctx.match[2], ctx.match[3], ctx.match[4]));
-
-bot.action('quick_guide', (ctx) => {
-  const text = `📖 <b>MANUAL DO BOMBER: REGRAS DA ARENA</b>\n\n` +
-    `1️⃣ <b>Equipe seu Cofre:</b> No menu Inventário, forneça sua chave ou forje uma nova.\n` +
-    `2️⃣ <b>Carga de Gás:</b> Envie MATIC (Polygon) ou BNB (BSC) para cobrir o custo das explosões.\n` +
-    `3️⃣ <b>Compre Munição:</b> No Item Shop, adquira Fire-Charges para as operações.\n` +
-    `4️⃣ <b>Plante a Bomba:</b> Na Arena, escolha seu par e clique em "PLANTAR BOMBA".\n\n` +
-    `<i>O robô operará 24h/dia seguindo seus timers de detonação.</i>`;
-  
-  return ctx.editMessageText(text, { 
-    parse_mode: 'HTML', 
-    reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback('📜 Regras do Jogo (Termos)', 'view_terms')],
-      [Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]
-    ]).reply_markup
-  });
-});
-
-bot.action('view_terms', (ctx) => {
-  return ctx.editMessageText(TERMS_TEXT, {
-    parse_mode: 'HTML',
-    reply_markup: Markup.inlineKeyboard([[Markup.button.callback('⬅️ Voltar ao Manual', 'quick_guide')]]).reply_markup
-  });
-});
-
-bot.action('support_link', (ctx) => {
-  const text = `🛠️ <b>CENTRAL DE COMANDO (SUPORTE)</b>\n\n` +
-    `Precisa de ajuda com seus itens ou power-ups?\n\n` +
-    `• <b>Game Master:</b> @SeuSuporteUser\n` +
-    `• <b>Bugs:</b> Use o botão abaixo para reportar falhas na arena.\n` +
-    `• <b>Guilda:</b> Parcerias e White-label.\n\n` +
-    `<i>Nossa guilda responde em tempo real em dias úteis.</i>`;
-
-  return ctx.editMessageText(text, { 
-    parse_mode: 'HTML', 
-    reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback('💬 Reportar Problema Técnico', 'report_issue')],
-      [Markup.button.callback('⬅️ Voltar ao Terminal', 'start_panel')]
-    ]).reply_markup
-  });
-});
-
-bot.action('report_issue', supportPanelHandler);
-bot.action(/^report_issue_type_(.+)$/, (ctx) => reportIssueHandler(ctx, ctx.match[1]));
-
-bot.action('tools_panel', toolsPanelHandler);
-bot.action('tool_gas_price', gasPriceHandler);
-bot.action('tool_price_list', priceListHandler);
-bot.action('tool_security', securityToolHandler);
-
-bot.action('referral_panel', referralPanelHandler);
-bot.action('status_panel', statusHandler);
-bot.action('view_history', historyHandler);
-bot.action('setup_referral_payout', (ctx) => ctx.scene.enter('SETUP_PAYOUT_ADDRESS'));
-bot.action('view_loot_history', showLootHistoryHandler);
-
-bot.action('start_panel', startHandler);
-
-
-
-
-const logger = require('../utils/logger');
-
-// 4. Error Handling
-bot.catch((err, ctx) => {
-  logger.error(`[Telegraf] Error for ${ctx.updateType}:`, err);
-  
-  const text = `❌ <b>Ocorreu um erro inesperado no bot.</b>\n\n` +
-    `Se este problema persistir ou você estiver travado em um menu, utilize o botão abaixo para alertar o suporte técnico.`;
-  
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🚨 Reportar ao Suporte', 'report_issue')],
-    [Markup.button.callback('⬅️ Ir para Início', 'start_panel')]
-  ]);
-
-  try {
-    return ctx.replyWithHTML(text, keyboard);
-  } catch (e) {
-    logger.error('[Telegraf] Failed to send send error message:', e);
-  }
-});
-
-  // 5. Start Bot
-  if (process.env.TELEGRAM_BOT_TOKEN) {
-    console.log('[INIT] Launching Bot...');
-    bot.launch()
-      .then(() => {
-        console.log('🚀 Bot Arena Bomberman em execução!');
-        logger.info('Bot started successfully');
-      })
-      .catch((err) => {
-        console.error('❌ CRITICAL: Error during bot.launch():', err);
-        logger.error('CRITICAL: Bot launch failed:', err);
-        process.exit(1);
-      });
-  } else {
-    logger.error('❌ TELEGRAM_BOT_TOKEN is missing!');
-  }
 
 } catch (initErr) {
-  console.error('\n💥 [FATAL] INITIALIZATION ERROR CAUGHT:');
+  console.error('\n💥 [FATAL] ENGINE INITIALIZATION FAILED:');
   console.error('-----------------------------------------');
   console.error('Message:', initErr.message);
-  console.error('Stack Trace:');
-  console.error(initErr.stack);
+  console.error('Stack:', initErr.stack);
   console.error('-----------------------------------------\n');
   process.exit(1);
 }
 
-// Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Graceful Shutdown
+process.once('SIGINT', () => bot && bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot && bot.stop('SIGTERM'));
 
 module.exports = bot;
