@@ -146,9 +146,7 @@ async function getSignal(tokenPair, tradeConfig) {
       fetchCandles(symbol, tfB)
     ]);
 
-    const maA = calculateMA(candlesA, maPeriodA);
-    const maB = calculateMA(candlesB, maPeriodB);
-    const rsiValue = tradeConfig?.rsiEnabled ? calculateRSI(candlesA, tradeConfig.rsiPeriod || 14) : null;
+    logger.info(`[Strategy] ${tokenPair} | Calibration: MA(${tfA}:${maPeriodA}), MA(${tfB}:${maPeriodB}), RSI:${tradeConfig?.rsiEnabled ? tradeConfig.rsiPeriod : 'OFF'}`);
 
     if (!candlesA || candlesA.length < 2) {
       return { signal: 'HOLD', reason: 'Dados insuficientes no banco local. Aguardando sincronização de preços.' };
