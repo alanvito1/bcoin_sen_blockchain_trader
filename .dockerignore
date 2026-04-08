@@ -12,7 +12,7 @@ README.md
 docs
 legacy
 backup
-test
+# test (removed to allow E2E QA on VPS)
 *.db
 *.sqlite
 .vscode
