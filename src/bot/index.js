@@ -1,131 +1,169 @@
-const { Telegraf, Scenes, session, Markup } = require('telegraf');
-const prisma = require('../config/prisma');
-require('dotenv').config();
+console.log('[DEBUG] >>> INDEX.JS BOOTSTRAP START');
+let bot;
 
-const startHandler = require('./commands/start');
-const { 
-  walletPanelHandler, 
-  generateWalletHandler, 
-  importWalletScene, 
-  disconnectWalletScene,
-  disconnectWalletHandler, 
-  disconnectConfirmHandler,
-  viewPrivateKeyHandler
-} = require('./features/wallet');
-const {
-  tradePanelHandler,
-  engineConfigHandler,
-  updateConfigScene,
-  startBotHandler,
-  stopBotHandler,
-  selectPairHandler,
-  setPairHandler,
-  setupStrategyAMenu,
-  setupStrategyBMenu,
-  setupWindowsMenu,
-  setupPairMenu,
-  logSettingsHandler,
-  toggleLogPreference,
-  strategySelectorMenu,
-  setStrategyPreset,
-  timeframeSelectorA,
-  timeframeSelectorB,
-  setTimeframe,
-  setupRsiMenu,
-  toggleRsi,
-  setupScheduleMenu,
-  setScheduleMode,
-  setIntervalPreset,
-  toggleMev,
-} = require('./features/tradePanel');
-const { storePanelHandler, selectNetworkHandler, selectAssetHandler, confirmCheckoutHandler, executePaymentHandler, onrampFlowHandler } = require('./features/store');
-const { addTokenScene } = require('./features/tokenManager');
-const { statusHandler, historyHandler } = require('./features/status');
+try {
+  const { Telegraf, Scenes, session, Markup } = require('telegraf');
+  const prisma = require('../config/prisma');
+  require('dotenv').config();
 
-const { 
-  adminHandler, 
-  broadcastHandler, 
-  adminToolsHandler, 
-  clearStuckHandler, 
-  adminStatusHandler,
-  dbHealthHandler 
-} = require('./commands/admin');
-const { supportPanelHandler, reportIssueHandler } = require('./features/support');
-const { toolsPanelHandler, gasPriceHandler, priceListHandler, securityToolHandler } = require('./features/tools');
-const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
-const rateLimit = require('./middleware/rateLimit');
-const { TERMS_TEXT } = require('./constants/texts');
-
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
-// 1. Session and Stage Setup
-const stage = new Scenes.Stage([
-  importWalletScene,
-  updateConfigScene,
-  disconnectWalletScene,
-  setupPayoutAddressScene,
-  addTokenScene
-]);
-
-
-const sessionStore = require('./sessionStore');
-
-// 0. Maintenance Middleware
-bot.use(async (ctx, next) => {
-  const isMaintenance = process.env.MAINTENANCE_MODE === 'true';
-  const isAdmin = String(ctx.from?.id) === String(process.env.ADMIN_TELEGRAM_ID);
+  // INITIALIZE BOT IMMEDIATELY
+  console.log('[INIT] Instantiating Telegraf...');
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  console.log(`[INIT] Token present: ${!!token} (Length: ${token ? token.length : 0})`);
   
-  if (isMaintenance && !isAdmin) {
-    const maintenanceText = `🛠️ <b>ARENA EM MANUTENÇÃO: UPGRADE DE HARDWARE</b>\n\n` +
-      `Estamos tunando os servidores para garantir explosões mais rápidas e seguras na arena.\n\n` +
-      `⏳ <b>Tempo Estimado:</b> Sincronizando blocos.\n\n` +
-      `<i>Por favor, volte ao lobby mais tarde. O Boss avisará quando o sistema estiver 100% online!</i>`;
-    
-    if (ctx.callbackQuery) {
-      return ctx.answerCbQuery('Sistema em manutenção. Tente novamente mais tarde.', { show_alert: true });
-    }
-    return ctx.replyWithHTML(maintenanceText);
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN is missing from environment variables!');
   }
-  return next();
-});
+  
+  bot = new Telegraf(token);
 
-bot.use(session({
-  property: 'session',
-  getSessionKey: (ctx) => ctx.from && ctx.chat && `${ctx.from.id}:${ctx.chat.id}`,
-  store: sessionStore
-}));
-bot.use(rateLimit);
-bot.use(stage.middleware());
+  console.log('[INIT] Loading Middleware & Store...');
+  const { telemetryMiddleware } = require('./middleware/telemetry');
+  const rateLimit = require('./middleware/rateLimit');
+  const sessionStore = require('./sessionStore');
 
-// 2. Commands
-bot.command('start', startHandler);
-bot.command('add', (ctx) => ctx.scene.enter('ADD_TOKEN_SCENE'));
-bot.command('loja', storePanelHandler);
-bot.command('wallet', walletPanelHandler);
-bot.command('carteira', walletPanelHandler);
-bot.command('referral', referralPanelHandler);
-bot.command('indicacao', referralPanelHandler);
-bot.command('status', statusHandler);
-bot.command('historico', historyHandler);
-bot.command('ajuda', supportPanelHandler);
-bot.command('cancel', async (ctx) => {
+  console.log('[INIT] Loading handlers & scenes...');
+  const startHandler = require('./commands/start');
+
+  const walletFeatures = require('./features/wallet');
+  const { 
+    walletPanelHandler, 
+    generateWalletHandler, 
+    importWalletScene, 
+    disconnectWalletScene,
+    viewPrivateKeyHandler
+  } = walletFeatures;
+
+  const tradePanelFeatures = require('./features/tradePanel');
+  const {
+    tradePanelHandler,
+    engineConfigHandler,
+    updateConfigScene,
+    startBotHandler,
+    stopBotHandler,
+    selectPairHandler,
+    setPairHandler,
+    setupStrategyAMenu,
+    setupStrategyBMenu,
+    setupWindowsMenu,
+    setupPairMenu,
+    logSettingsHandler,
+    toggleLogPreference,
+    strategySelectorMenu,
+    setStrategyPreset,
+    timeframeSelectorA,
+    timeframeSelectorB,
+    setTimeframe,
+    setupRsiMenu,
+    toggleRsi,
+    setupScheduleMenu,
+    setScheduleMode,
+    setIntervalPreset,
+    toggleMev,
+    toggleAutoSell,
+    toggleAntiRug,
+    setupSettingsMenu,
+    toggleSlippage,
+    togglePriority,
+    buyAmountSelectorA,
+    setBuyAmountA,
+    sellAmountSelectorA,
+    setSellAmountA,
+    buyAmountSelectorB,
+    setBuyAmountB,
+    sellAmountSelectorB,
+    setSellAmountB,
+    tradeStatsHandler,
+    resetStatsHandler,
+  } = tradePanelFeatures;
+
+  const { storePanelHandler, selectNetworkHandler, selectAssetHandler, confirmCheckoutHandler, executePaymentHandler, onrampFlowHandler } = require('./features/store');
+  const { addTokenScene } = require('./features/tokenManager');
+  const { statusHandler, historyHandler } = require('./features/status');
+
+  const { 
+    adminHandler, 
+    adminToolsHandler, 
+    clearStuckHandler, 
+    adminStatusHandler,
+    dbHealthHandler 
+  } = require('./commands/admin');
+
+  const { supportPanelHandler, reportIssueHandler } = require('./features/support');
+  const { toolsPanelHandler, gasPriceHandler, priceListHandler, securityToolHandler } = require('./features/tools');
+  const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
+  
+  // 3. Define Stage with all Scenes
+  console.log('[INIT] Initializing Scenes Stage...');
+  const stage = new Scenes.Stage([
+    importWalletScene,
+    disconnectWalletScene,
+    updateConfigScene,
+    addTokenScene,
+    setupPayoutAddressScene
+  ]);
+
+  // 4. Apply Middleware in Order
+  console.log('[INIT] Registering Global Middlewares...');
+  
+  // 1. Telemetry (First!)
+  bot.use(telemetryMiddleware);
+
+  // 2. Session (Prisma Store)
+  bot.use(session({ 
+    store: sessionStore,
+    getSessionKey: (ctx) => ctx.from && ctx.chat && `${ctx.from.id}:${ctx.chat.id}`
+  }));
+
+  // 3. Rate Limit
+  bot.use(rateLimit);
+
+  // 4. Scenes Stage
+  bot.use(stage.middleware());
+
+  console.log('[INIT] Middleware registration complete.');
+
+// 2. Commands & Actions Registration with Safety (Fase 1.1)
+const register = (type, trigger, handler) => {
+    if (typeof handler !== 'function') {
+        console.error(`[INIT] CRITICAL ERROR: Handler for ${type}('${trigger}') is ${typeof handler}!`);
+        // We throw here purposefully to see the stack trace if needed, 
+        // but now we know WHICH trigger failed.
+        throw new Error(`Handler for ${trigger} is undefined`);
+    }
+    if (type === 'command') bot.command(trigger, handler);
+    if (type === 'action') bot.action(trigger, handler);
+};
+
+console.log('[INIT] Registering Commands...');
+register('command', 'start', startHandler);
+register('command', 'add', (ctx) => ctx.scene.enter('ADD_TOKEN_SCENE'));
+register('command', 'loja', storePanelHandler);
+register('command', 'wallet', walletPanelHandler);
+register('command', 'carteira', walletPanelHandler);
+register('command', 'referral', referralPanelHandler);
+register('command', 'indicacao', referralPanelHandler);
+register('command', 'status', statusHandler);
+register('command', 'historico', historyHandler);
+register('command', 'ajuda', supportPanelHandler);
+register('command', 'cancel', async (ctx) => {
   await ctx.scene.leave();
   return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');
 });
 
-// 3. Action Handlers (Inline Keyboards)
-bot.action('start_panel', startHandler);
-bot.action('wallet_panel', walletPanelHandler);
-bot.action('trade_panel', tradePanelHandler);
-bot.action('store_panel', storePanelHandler);
-bot.action('onramp_flow', onrampFlowHandler);
+console.log('[INIT] Registering Actions...');
+register('action', 'start_panel', startHandler);
+register('action', 'wallet_panel', walletPanelHandler);
+register('action', 'trade_panel', tradePanelHandler);
+register('action', 'store_panel', storePanelHandler);
+register('action', 'onramp_flow', onrampFlowHandler);
 
 // Sub-menus
-bot.action('setup_strategy_a', setupStrategyAMenu);
-bot.action('setup_strategy_b', setupStrategyBMenu);
-bot.action('setup_windows', setupWindowsMenu);
-bot.action('setup_pair_menu', setupPairMenu);
-bot.action('manage_engine', async (ctx) => {
+register('action', 'setup_strategy_a', setupStrategyAMenu);
+register('action', 'setup_strategy_b', setupStrategyBMenu);
+register('action', 'setup_windows', setupWindowsMenu);
+register('action', 'setup_pair_menu', setupPairMenu);
+register('action', 'manage_engine', async (ctx) => {
   const cfg = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
   return engineConfigHandler(ctx, cfg.network, cfg.tokenPair.split('/')[0]);
 });
@@ -333,25 +371,39 @@ bot.catch((err, ctx) => {
   try {
     return ctx.replyWithHTML(text, keyboard);
   } catch (e) {
-    logger.error('[Telegraf] Failed to send error message:', e);
+    logger.error('[Telegraf] Failed to send send error message:', e);
   }
 });
 
-// 5. Start Bot
-if (process.env.TELEGRAM_BOT_TOKEN) {
-  bot.launch().then(() => {
-    logger.info('🚀 Telegram Bot is running...');
-  });
-} else {
-  logger.error('❌ TELEGRAM_BOT_TOKEN is missing!');
+  // 5. Start Bot
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    console.log('[INIT] Launching Bot...');
+    bot.launch()
+      .then(() => {
+        console.log('🚀 Bot Arena Bomberman em execução!');
+        logger.info('Bot started successfully');
+      })
+      .catch((err) => {
+        console.error('❌ CRITICAL: Error during bot.launch():', err);
+        logger.error('CRITICAL: Bot launch failed:', err);
+        process.exit(1);
+      });
+  } else {
+    logger.error('❌ TELEGRAM_BOT_TOKEN is missing!');
+  }
+
+} catch (initErr) {
+  console.error('\n💥 [FATAL] INITIALIZATION ERROR CAUGHT:');
+  console.error('-----------------------------------------');
+  console.error('Message:', initErr.message);
+  console.error('Stack Trace:');
+  console.error(initErr.stack);
+  console.error('-----------------------------------------\n');
+  process.exit(1);
 }
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-// 6. Background Workers
-require('../worker/billingCron');
-require('../worker/notificationWorker');
 
 module.exports = bot;
