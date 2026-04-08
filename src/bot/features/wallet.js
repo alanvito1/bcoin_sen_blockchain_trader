@@ -1,9 +1,12 @@
+console.log('[DEBUG] >>> WALLET.JS LOADING START');
 const { Markup, Scenes } = require('telegraf');
 const { isHexString } = require('ethers');
+console.log('[DEBUG] >>> WALLET.JS BASE DEPENDENCIES LOADED');
 const prisma = require('../../config/prisma');
 const walletService = require('../../services/walletService');
 const balanceService = require('../../services/balanceService');
 const encryption = require('../../utils/encryption');
+console.log('[DEBUG] >>> WALLET.JS ALL DEPENDENCIES LOADED');
 
 /**
  * Scene for importing a private key
@@ -11,11 +14,14 @@ const encryption = require('../../utils/encryption');
 const importWalletScene = new Scenes.WizardScene(
   'IMPORT_WALLET_SCENE',
   async (ctx) => {
+    console.log(`[Wizard] User ${ctx.from.id} entered IMPORT_WALLET_SCENE`);
     await ctx.reply('🛡️ <b>ESCUDO ATIVADO:</b> Recomendamos usar uma "Burner Wallet". Nunca use seu cofre principal.\n\nPor favor, insira o <b>Código de Acesso (Private Key)</b> abaixo:', { parse_mode: 'HTML' });
     return ctx.wizard.next();
   },
   async (ctx) => {
     if (!ctx.message || !ctx.message.text) return;
+    
+    console.log(`[Wizard] Step 2: Received message from ${ctx.from.id}`);
     
     const text = ctx.message.text.trim();
 
@@ -45,6 +51,7 @@ const importWalletScene = new Scenes.WizardScene(
 
       // 4. Import via Service
       const publicAddress = await walletService.importExistingWallet(user.id, cleanKey, 'POLYGON');
+      console.log(`[Wizard] Wallet imported successfully for user ${user.id}: ${publicAddress}`);
 
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Voltar à Carteira', 'wallet_panel')]
@@ -53,6 +60,7 @@ const importWalletScene = new Scenes.WizardScene(
       await ctx.reply(`✅ <b>Carteira Importada com Sucesso!</b>\nEndereço: <code>${publicAddress}</code>`, { parse_mode: 'HTML', ...keyboard });
       return ctx.scene.leave();
     } catch (error) {
+      console.error(`[Wizard] Import Error for user ${ctx.from.id}:`, error.message);
       await ctx.reply(`❌ <b>Erro na Importação:</b> ${error.message}\n\nTente novamente ou envie /cancel para sair.`, { parse_mode: 'HTML' });
     }
   }

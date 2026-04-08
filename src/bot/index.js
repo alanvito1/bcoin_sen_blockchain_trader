@@ -1,6 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
-const { Telegraf, Scenes, session, Markup } = require('telegraf');
+const { Telegraf, Scenes, Markup } = require('telegraf');
+const { session } = require('@telegraf/session');
 
 // 1. Core Services
 const prisma = require('../config/prisma');
@@ -160,10 +161,16 @@ try {
   register('action', 'setup_pair_menu', setupPairMenu);
   
   bot.action('generate_wallet', generateWalletHandler);
-  bot.action('import_wallet', (ctx) => ctx.scene.enter('IMPORT_WALLET_SCENE'));
+  bot.action('import_wallet', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('IMPORT_WALLET_SCENE');
+  });
   bot.action('disconnect_wallet_confirm', disconnectConfirmHandler);
   bot.action('view_private_key', viewPrivateKeyHandler);
-  bot.action('disconnect_wallet_force', (ctx) => ctx.scene.enter('DISCONNECT_WALLET_SCENE'));
+  bot.action('disconnect_wallet_force', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('DISCONNECT_WALLET_SCENE');
+  });
   
   // Multi-engine / Generic Actions
   bot.action(/^manage_(.+)_(.+)$/, (ctx) => engineConfigHandler(ctx, ctx.match[1], ctx.match[2]));
