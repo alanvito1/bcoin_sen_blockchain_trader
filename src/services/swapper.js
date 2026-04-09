@@ -116,9 +116,10 @@ async function getBestPath(routerContract, amountIn, tokenIn, tokenOut, bridgeTo
  * @param {string} [amountType='native'] - 'native' (BNB/POL) or 'token'.
  * @param {number} [marketPrice=null] - Global market price for anti-sandwich check.
  * @param {ethers.Wallet} [externalSigner=null] - Optional specific wallet to use.
+ * @param {Object} [inputTokenOverride=null] - Optional token to use as input.
  * @returns {Promise<Object|null>} Transaction receipt or error object.
  */
-async function swapToken(networkName, tokenConfig, direction = 'sell', customAmount = null, amountType = 'native', marketPrice = null, externalSigner = null) {
+async function swapToken(networkName, tokenConfig, direction = 'sell', customAmount = null, amountType = 'native', marketPrice = null, externalSigner = null, inputTokenOverride = null) {
   // 1. Resolve Wallet (Use external signer if provided, otherwise global admin wallet)
   let wallet = externalSigner || wallets[networkName];
   if (!wallet) {
@@ -161,9 +162,32 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     let isNativeIn = false;
     let isNativeOut = false;
 
-      const decimals = await withRPCRetry(() => tokenContract.decimals(), networkName);
+    const decimals = await withRPCRetry(() => tokenContract.decimals(), networkName);
     
-    if (direction === 'sell') {
+    // Check if it is a token-to-token swap
+    if (inputTokenOverride) {
+      tokenIn = inputTokenOverride.address;
+      tokenOut = tokenConfig.address;
+      
+      const inDecimals = inputTokenOverride.decimals || 18;
+      amountIn = ethers.parseUnits(customAmount.toString(), inDecimals);
+      amountInFormatted = ethers.formatUnits(amountIn, inDecimals);
+      
+      const inContract = new ethers.Contract(tokenIn, ERC20_ABI, wallet);
+      const balance = await withRPCRetry(() => inContract.balanceOf(wallet.address), networkName);
+      
+      if (balance < amountIn) {
+        logger.warn(`[${networkName}] ${inputTokenOverride.symbol} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${amountInFormatted}`);
+        return;
+      }
+
+      const allowance = await withRPCRetry(() => inContract.allowance(wallet.address, network.router), networkName);
+      if (allowance < amountIn) {
+        logger.step(`[${networkName}] Aprovando ${inputTokenOverride.symbol} para o Router...`);
+        const approveTx = await withRPCRetry(() => inContract.approve(network.router, ethers.MaxUint256), networkName);
+        await withRPCRetry(() => approveTx.wait(), networkName, 10, 3000);
+      }
+    } else if (direction === 'sell') {
       tokenIn = tokenConfig.address;
       tokenOut = network.wrappedNative;
       isNativeOut = true;
