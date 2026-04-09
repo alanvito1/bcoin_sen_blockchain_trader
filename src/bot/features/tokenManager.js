@@ -43,11 +43,19 @@ const addTokenScene = new Scenes.WizardScene(
   },
   async (ctx) => {
     if (!ctx.message || !ctx.message.text) return;
-    const address = ctx.message.text.trim();
+    const text = ctx.message.text.trim();
 
-    if (!ethers.isAddress(address)) {
+    // ESCAPE HATCH
+    if (text === '/cancel' || text === '/start') {
+      await ctx.reply('❌ Operação cancelada.');
+      return ctx.scene.leave();
+    }
+
+    if (!ethers.isAddress(text)) {
       return ctx.reply('❌ Endereço inválido. Envie um contrato válido (0x...) ou /cancel.');
     }
+
+    const address = text;
 
     const network = ctx.scene.session.state.network;
     await ctx.reply(`🔍 Escaneando contrato no setor ${network}...`);

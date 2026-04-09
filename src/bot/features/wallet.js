@@ -21,17 +21,12 @@ const importWalletScene = new Scenes.WizardScene(
   async (ctx) => {
     if (!ctx.message || !ctx.message.text) return;
     
-    console.log(`[Wizard] Step 2: Received message from ${ctx.from.id}`);
-    
     const text = ctx.message.text.trim();
 
-    // 1. Handle Commands during input
-    if (text.startsWith('/')) {
-      if (text === '/cancel' || text === '/start') {
-        await ctx.reply('❌ Processo de importação interrompido.');
-        return ctx.scene.leave();
-      }
-      return ctx.reply('⚠️ Você está importando uma carteira. Por favor, envie sua <b>Chave Privada</b> ou /cancel para sair.', { parse_mode: 'HTML' });
+    // ESCAPE HATCH
+    if (text === '/cancel' || text === '/start') {
+      await ctx.reply('❌ Operação cancelada.');
+      return ctx.scene.leave();
     }
 
     try {
@@ -78,14 +73,15 @@ const disconnectWalletScene = new Scenes.WizardScene(
   async (ctx) => {
     if (!ctx.message || !ctx.message.text) return;
     
-    const text = ctx.message.text.trim().toUpperCase();
+    const text = ctx.message.text.trim();
 
-    if (text === 'CANCELAR' || text === '/cancel') {
+    // ESCAPE HATCH
+    if (text === '/cancel' || text === '/start' || text.toUpperCase() === 'CANCELAR') {
       await ctx.reply('❌ Exclusão cancelada.');
       return ctx.scene.leave();
     }
 
-    if (text !== 'DELETAR') {
+    if (text.toUpperCase() !== 'DELETAR') {
       return ctx.reply('❌ Confirmação incorreta. Digite <code>DELETAR</code> para confirmar ou /cancel para sair.', { parse_mode: 'HTML' });
     }
 
@@ -93,13 +89,13 @@ const disconnectWalletScene = new Scenes.WizardScene(
       const telegramId = BigInt(ctx.from.id);
       const user = await prisma.user.findUnique({ where: { telegramId } });
 
-      await prisma.wallet.delete({ where: { userId: user.id } });
+      if (user.wallet) {
+        await prisma.wallet.delete({ where: { userId: user.id } });
+      }
       
       await ctx.reply('🗑️ <b>Carteira removida com sucesso.</b>', { parse_mode: 'HTML' });
       
-      // Navigate back to start
-      const startHandler = require('../commands/start');
-      return startHandler(ctx);
+      return ctx.scene.leave();
     } catch (error) {
       console.error('[Wallet] Error deleting wallet:', error);
       await ctx.reply('❌ Erro ao remover carteira. Tente novamente.');
@@ -117,6 +113,10 @@ const disconnectWalletScene = new Scenes.WizardScene(
  */
 async function walletPanelHandler(ctx) {
   try {
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery().catch(() => {});
+    }
+
     const telegramId = BigInt(ctx.from.id);
     const user = await prisma.user.findUnique({ 
       where: { telegramId }, 
@@ -197,15 +197,15 @@ async function walletPanelHandler(ctx) {
 }
 
 async function generateWalletHandler(ctx) {
+  await ctx.answerCbQuery().catch(() => {});
   const telegramId = BigInt(ctx.from.id);
   const user = await prisma.user.findUnique({ where: { telegramId }, include: { wallet: true } });
   
-  if (user.wallet) return ctx.answerCbQuery('❌ Você já possui uma carteira vinculada.', { show_alert: true });
+  if (user.wallet) return ctx.reply('❌ Você já possui uma carteira vinculada.');
 
-  // Use POLYGON as default for new users, but this could be based on current context
+  // Use POLYGON as default for new users
   await walletService.generateNewWallet(user.id, 'POLYGON');
   
-  await ctx.answerCbQuery('✅ Nova Carteira Gerada!', { show_alert: true });
   return walletPanelHandler(ctx);
 }
 
@@ -223,6 +223,7 @@ async function disconnectWalletHandler(ctx) {
  * Confirmation menu for disconnecting wallet
  */
 async function disconnectConfirmHandler(ctx) {
+  await ctx.answerCbQuery().catch(() => {});
   const text = `⚠️ <b>AVISO CRÍTICO DE SEGURANÇA</b>\n\n` +
     `Você está prestes a desconectar sua carteira do robô.\n\n` +
     `🚨 <b>LEIA COM ATENÇÃO:</b> Se você não possuir a sua <b>Chave Privada (Private Key)</b> salva, você perderá permanentemente o acesso aos seus fundos após a remoção.\n\n` +

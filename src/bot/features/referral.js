@@ -8,11 +8,10 @@ const levelingService = require('../../services/levelingService');
  * Main Referral Dashboard for Users
  */
 async function referralPanelHandler(ctx) {
+  if (ctx.callbackQuery) {
+    await ctx.answerCbQuery().catch(() => {});
+  }
   const telegramId = BigInt(ctx.from.id);
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    include: { referrals: true }
-  });
 
   if (!user.referralCode) {
     return ctx.reply('❌ Seu código de indicação ainda não foi gerado. Digite /start para atualizar.');
@@ -123,11 +122,19 @@ setupPayoutAddressScene.enter((ctx) => {
 });
 
 setupPayoutAddressScene.on('text', async (ctx) => {
-  const address = ctx.message.text.trim();
+  const text = ctx.message.text.trim();
   
-  if (!isAddress(address)) {
+  // ESCAPE HATCH
+  if (text === '/cancel' || text === '/start') {
+    await ctx.reply('❌ Operação cancelada.');
+    return ctx.scene.leave();
+  }
+
+  if (!isAddress(text)) {
     return ctx.reply('❌ Formato de endereço inválido. Certifique-se de que é um endereço Ethereum/BSC/Polygon válido (começa com 0x). Envie novamente ou digite /cancel.');
   }
+
+  const address = text;
 
   const telegramId = BigInt(ctx.from.id);
   await prisma.user.update({

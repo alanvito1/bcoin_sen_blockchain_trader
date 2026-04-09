@@ -60,8 +60,14 @@ const updateConfigScene = new Scenes.WizardScene(
       return ctx.reply('❌ Por favor, <b>digite</b> um valor numérico válido (ex: 0.05).', { parse_mode: 'HTML' });
     }
 
+    const text = ctx.message.text.trim();
+    if (text === '/cancel' || text === '/start') {
+      await ctx.reply('❌ Operação cancelada.');
+      return ctx.scene.leave();
+    }
+
     const { field, label, engineId } = ctx.scene.session.state;
-    const value = parseFloat(ctx.message.text.replace(',', '.'));
+    const value = parseFloat(text.replace(',', '.'));
 
     if (isNaN(value)) return ctx.reply('❌ Por favor, envie apenas números.');
 
@@ -113,6 +119,9 @@ const updateConfigScene = new Scenes.WizardScene(
 // Trade Panel — engine list
 // ---------------------------------------------------------------------------
 async function tradePanelHandler(ctx) {
+  if (ctx.callbackQuery) {
+    await ctx.answerCbQuery().catch(() => {});
+  }
   const telegramId = BigInt(ctx.from.id);
   const user = await prisma.user.findUnique({
     where: { telegramId },
@@ -326,6 +335,7 @@ async function timeframeSelectorB(ctx) {
 }
 
 async function setTimeframe(ctx, strategyField, tf, menuFn) {
+  await ctx.answerCbQuery().catch(() => {});
   await prisma.tradeConfig.update({
     where: { id: ctx.session.selectedEngineId },
     data: { [strategyField]: tf },
