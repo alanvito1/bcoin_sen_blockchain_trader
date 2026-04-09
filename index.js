@@ -13,14 +13,44 @@ logger.info('- Scanner: Active (1m interval)');
 logger.info('- Trade Executor: Listening on Redis');
 
 // Start Bot
-const bot = require('./src/bot/index');
+let bot;
+try {
+  console.log('🚀 [System] Loading Bot Engine...');
+  bot = require('./src/bot/index');
+  console.log('✅ [System] Bot Engine Loaded.');
+} catch (e) {
+  console.error('💥 [FATAL] Failed to load Bot Engine:');
+  console.error('Message:', e.message);
+  console.error('Stack:', e.stack);
+  process.exit(1);
+}
 
 // Start Workers
-const scanner = require('./src/worker/scanner');
-const tradeExecutor = require('./src/worker/tradeExecutor');
-const billingCron = require('./src/worker/billingCron');
-const { notificationWorker } = require('./src/worker/notificationWorker');
-const priceFetcher = require('./src/worker/priceFetcher'); // Phase 3: DB Scalability
+try {
+  console.log('🚀 [System] Initializing Workers...');
+  
+  console.log('  - Scanner...');
+  const scanner = require('./src/worker/scanner');
+  
+  console.log('  - Trade Executor...');
+  const tradeExecutor = require('./src/worker/tradeExecutor');
+  
+  console.log('  - Billing Cron...');
+  const billingCron = require('./src/worker/billingCron');
+  
+  console.log('  - Notifications...');
+  const { notificationWorker } = require('./src/worker/notificationWorker');
+  
+  console.log('  - Price Fetcher...');
+  const priceFetcher = require('./src/worker/priceFetcher');
+
+  console.log('✅ [System] All Workers Initialized.');
+} catch (workerErr) {
+  console.error('💥 [FATAL] Worker Initialization Failed:');
+  console.error('Message:', workerErr.message);
+  console.error('Stack:', workerErr.stack);
+  process.exit(1);
+}
 
 // Basic Health Check
 setInterval(async () => {

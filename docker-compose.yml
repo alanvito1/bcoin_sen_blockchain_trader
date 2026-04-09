@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.3'
 
 services:
   db:
@@ -38,10 +38,8 @@ services:
     container_name: trader-engine
     restart: always
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - db
+      - redis
     env_file:
       - .env
     volumes:
@@ -51,11 +49,10 @@ services:
       - REDIS_URL=redis://redis:6379
     # Healthcheck is defined in Dockerfile, but we can override or re-assert here
     healthcheck:
-      test: ["CMD", "node", "src/health.js"]
+      test: ["CMD-SHELL", "node src/health.js"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
 
 volumes:
   pgdata:

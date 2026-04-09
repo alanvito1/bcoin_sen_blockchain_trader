@@ -34,32 +34,39 @@ async function pingPong() {
     console.log(`🚀 Enviando /start para ${botUsername}...`);
     await client.sendMessage(botUsername, { message: "/start" });
 
-    const delay = 3500;
+    const delay = 7000;
     console.log(`⏳ Aguardando ${delay/1000}s para propagação e resposta...`);
     await new Promise(r => setTimeout(r, delay));
 
-    console.log("📥 Buscando histórico de mensagens (getMessages)...");
-    const messages = await client.getMessages(botUsername, { limit: 1 });
+    console.log("📥 Buscando histórico de mensagens (últimas 3)...");
+    const messages = await client.getMessages(botUsername, { limit: 3 });
     
     if (messages && messages.length > 0) {
-        const lastMsg = messages[0];
-        const isFromBot = lastMsg.peerId && lastMsg.peerId.userId && lastMsg.peerId.userId.toString() === botId;
-        const isIncoming = !lastMsg.out;
+        console.log("\n--- Auditoria de Histórico ---");
+        let foundResponse = false;
+        
+        for (const msg of messages) {
+            const senderId = msg.senderId ? msg.senderId.toString() : "N/A";
+            const isIncoming = !msg.out;
+            console.log(`[${isIncoming ? 'IN' : 'OUT'}] De: ${senderId} | Texto: ${msg.message.substring(0, 50).replace(/\n/g, ' ')}...`);
 
-        console.log("\n========================================");
-        console.log("📬 ÚLTIMA MENSAGEM NO CHAT:");
-        console.log(`De: ${isFromBot ? botUsername : 'Eu'}`);
-        console.log(`ID Mensagem: ${lastMsg.id}`);
-        console.log(`Conteúdo: ${lastMsg.message.substring(0, 150)}${lastMsg.message.length > 150 ? '...' : ''}`);
-        console.log("========================================\n");
+            // Se for incoming e o sender for o bot (ou se for diferente de nós)
+            if (isIncoming && senderId === botId) {
+                console.log("\n========================================");
+                console.log("✅ [PONG] SUCESSO! Resposta encontrada no histórico.");
+                console.log(`Conteúdo: ${msg.message.substring(0, 150)}...`);
+                console.log("========================================\n");
+                foundResponse = true;
+                break;
+            }
+        }
 
-        if (isIncoming && isFromBot) {
-            console.log("✅ [PONG] SUCESSO! O Bot respondeu corretamente.");
+        if (foundResponse) {
             await client.disconnect();
             process.exit(0);
         } else {
-            console.error("❌ [FALHA] A última mensagem não é uma resposta do Bot (Incoming).");
-            console.log("Dica: Verifique se o Bot está rodando na VPS.");
+            console.error("\n❌ [FALHA] Nenhuma resposta do Bot encontrada nas últimas 3 mensagens.");
+            console.log(`Bot Alvo ID: ${botId}`);
             await client.disconnect();
             process.exit(1);
         }

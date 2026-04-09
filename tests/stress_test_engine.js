@@ -7,6 +7,7 @@ dotenv.config();
 
 async function runStressTest(jobCount = 500) {
     console.log(`\n🚀 [STRESS TEST] Iniciando carga de ${jobCount} jobs...`);
+    console.log('DATABASE_URL:', process.env.DATABASE_URL);
     const tradeQueue = new Queue('tradeQueue', { connection: redisConnection });
     
     console.log('🧹 Limpando fila...');
