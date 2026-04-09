@@ -8,9 +8,9 @@ async function main() {
   console.log('🚀 MISSÃO: FOGO REAL (MAINNET BSC)');
   console.log('🎯 Alvo: 1 USDT ➔ BCOIN');
 
-  const userId = '1'; // Target user (Founder)
+  const telegramId = 1692505402n; // Target user (Founder)
   const user = await prisma.user.findFirst({
-    where: { id: userId },
+    where: { telegramId },
     include: { wallet: true, tradeConfigs: true }
   });
 
