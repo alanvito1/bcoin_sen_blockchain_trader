@@ -3,16 +3,13 @@ const prisma = new PrismaClient();
 
 async function main() {
   const users = await prisma.user.findMany({
-    include: { wallets: true }
+    include: { wallet: true }
   });
   console.log('--- DATABASE USERS ---');
   users.forEach(u => {
     console.log(`User ID: ${u.id}`);
     console.log(`Telegram ID: ${u.telegramId.toString()}`);
-    console.log(`Wallets: ${u.wallets.length}`);
-    u.wallets.forEach(w => {
-      console.log(`  - ${w.address} (${w.network})`);
-    });
+    console.log(`Wallet: ${u.wallet ? u.wallet.publicAddress : 'No Wallet'}`);
     console.log('---------------------');
   });
 }
