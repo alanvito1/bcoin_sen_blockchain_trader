@@ -10,21 +10,21 @@ RUN apk add --no-cache openssl
 # Copy package files first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install ONLY production dependencies
-RUN npm ci --omit=dev
+# Install dependencies (use npm install for better resilience on VPS)
+RUN npm install --omit=dev --network-timeout=100000
 
-# Copy application source and configuration
+# Copy the rest of the application code
 COPY . .
 
-# Generate Prisma Client
+# Generate Prisma Client (needs to happen after copying the schema)
 RUN npx prisma generate
-
-# Healthcheck: Ping DB and Redis every 30s
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node src/health.js
 
 # Expose port (Internal Bot UI / Health)
 EXPOSE 3000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD node src/health.js
 
 # Start with migration sync and bot engine
 CMD ["npm", "run", "start:prod"]
