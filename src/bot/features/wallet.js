@@ -114,7 +114,7 @@ const disconnectWalletScene = new Scenes.WizardScene(
 async function walletPanelHandler(ctx) {
   try {
     if (ctx.callbackQuery) {
-      await ctx.answerCbQuery().catch(() => {});
+      await ctx.answerCbQuery('💎 Sincronizando com a Blockchain...').catch(() => {});
     }
 
     const telegramId = BigInt(ctx.from.id);

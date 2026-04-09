@@ -63,7 +63,8 @@ module.exports = {
       usdt: '0x55d398326f99059fF775485246999027B3197955',
       tokens: [
         { name: 'BCOIN', address: '0x00e1656e45f18ec6747f5a8496fd39b50b38396d', symbol: 'BCOIN', decimals: 18, pool: '0x2eebe0c34da9ba65521e98cbaa7d97496d05f489' },
-        { name: 'SEN', address: '0xb43ac9a81eda5a5b36839d5b6fc65606815361b0', symbol: 'SEN', decimals: 18, pool: '0xc54aa5694cd8bd419ac3bba11ece94aa6c5f9b01' }
+        { name: 'SEN', address: '0xb43ac9a81eda5a5b36839d5b6fc65606815361b0', symbol: 'SEN', decimals: 18, pool: '0xc54aa5694cd8bd419ac3bba11ece94aa6c5f9b01' },
+        { name: 'USDT', address: '0x55d398326f99059fF775485246999027B3197955', symbol: 'USDT', decimals: 18 }
       ],
       explorerUrl: 'https://bscscan.com',
       explorerApi: process.env.BSCSCAN_API_KEY,
