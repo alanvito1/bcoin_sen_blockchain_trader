@@ -20,25 +20,26 @@ async function runStressTest(jobCount = 500) {
     await tradeQueue.drain();
     await tradeQueue.obliterate({ force: true }).catch(() => {});
     
-    // Find a valid user with a wallet and config
-    const config = await prisma.tradeConfig.findFirst({
-        where: {
-            isOperating: true,
+    // Robust Selection: Find any user with a wallet and at least one config
+    const allWallets = await prisma.wallet.findMany({
+        include: {
             user: {
-                wallet: { isNot: null }
-            }
-        },
-        include: { 
-            user: {
-                include: { wallet: true }
+                include: {
+                    tradeConfigs: { where: { isOperating: true } }
+                }
             }
         }
     });
 
-    if (!config || !config.user || !config.user.wallet) {
-        console.error('❌ Nenhum usuário com TradeConfig + Wallet ativo encontrado.');
+    const activeTarget = allWallets.find(w => w.user && w.user.tradeConfigs.length > 0);
+
+    if (!activeTarget) {
+        console.error('❌ Nenhum usuário com Wallet + TradeConfig (isOperating: true) encontrado no banco.');
         process.exit(1);
     }
+
+    const config = activeTarget.user.tradeConfigs[0];
+    const wallet = activeTarget;
 
     console.log(`🎯 Alvo do Teste: Usuário ${config.userId} | Par: ${config.tokenPair}`);
 
@@ -47,8 +48,6 @@ async function runStressTest(jobCount = 500) {
         where: { id: config.id },
         data: { dryRun: true }
     });
-
-    const wallet = config.user.wallet;
 
     // 2. Load Generation
     console.log(`📦 Injetando ${jobCount} jobs na tradeQueue...`);
