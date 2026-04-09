@@ -20,23 +20,29 @@ async function runStressTest(jobCount = 500) {
     await tradeQueue.drain();
     await tradeQueue.obliterate({ force: true }).catch(() => {});
     
-    // Setup target user (BCOIN pair)
+    // Find a valid user with a wallet and config
     const config = await prisma.tradeConfig.findFirst({
-        where: { tokenPair: 'BCOIN/USDT', network: 'BSC' }
+        where: {
+            isOperating: true,
+            wallet: { isNot: null }
+        },
+        include: { wallet: true }
     });
 
-    if (!config) {
-        console.error('❌ Configuração BCOIN/USDT não encontrada para o teste.');
+    if (!config || !config.wallet) {
+        console.error('❌ Nenhum usuário com TradeConfig + Wallet ativo encontrado.');
         process.exit(1);
     }
 
-    // Ensure Dry Run is ON globally or for this user
+    console.log(`🎯 Alvo do Teste: Usuário ${config.userId} | Par: ${config.tokenPair}`);
+
+    // Ensure Dry Run is ON for this user
     await prisma.tradeConfig.update({
         where: { id: config.id },
-        data: { dryRun: true, isOperating: true }
+        data: { dryRun: true }
     });
 
-    const wallet = await prisma.wallet.findUnique({ where: { userId: config.userId } });
+    const wallet = config.wallet;
 
     // 2. Load Generation
     console.log(`📦 Injetando ${jobCount} jobs na tradeQueue...`);
