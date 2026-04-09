@@ -1,6 +1,6 @@
 const prisma = require('../src/config/prisma');
 const config = require('../src/config');
-const { encryption } = require('../src/utils/encryption');
+const encryption = require('../src/utils/encryption');
 const { swapToken } = require('../src/services/swapper');
 const { ethers } = require('ethers');
 
