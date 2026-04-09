@@ -1,7 +1,7 @@
 const { ethers, formatUnits, Contract } = require('ethers');
 const prisma = require('../src/config/prisma');
 const config = require('../src/config');
-const { encryption } = require('../src/utils/security');
+const { encryption } = require('../src/utils/encryption');
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
