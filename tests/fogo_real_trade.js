@@ -9,12 +9,31 @@ async function main() {
   console.log('🎯 Alvo: 1 USDT ➔ BCOIN');
 
   const telegramId = 1692505402n; // Target user (Founder)
+  console.log(`🔍 Buscando usuário com Telegram ID: ${telegramId.toString()}...`);
+  
   const user = await prisma.user.findFirst({
-    where: { telegramId },
-    include: { wallet: true, tradeConfigs: true }
+    where: { 
+      OR: [
+        { telegramId: telegramId },
+        { telegramId: Number(telegramId) } // Try both for robustness
+      ]
+    },
+    include: { wallet: true }
   });
 
-  if (!user || !user.wallet) throw new Error('Usuário ou Carteira não encontrada.');
+  if (!user) {
+    console.error('❌ Usuário não encontrado no banco de dados.');
+    const allUsers = await prisma.user.findMany({ select: { id: true, telegramId: true } });
+    console.log('Usuários disponíveis:', allUsers.map(u => ({ id: u.id, tid: u.telegramId.toString() })));
+    throw new Error('Missão abortada: Usuário não existe.');
+  }
+
+  if (!user.wallet) {
+    console.error(`❌ Usuário ${user.id} encontrado, mas SEM CARTEIRA vinculada.`);
+    throw new Error('Missão abortada: Carteira não configurada.');
+  }
+
+  console.log(`✅ Usuário e Carteira localizados: ${user.id}`);
 
   // 1. Decrypt Wallet
   const rpcUrl = config.networks.bsc.rpc.split(',')[0].trim();
