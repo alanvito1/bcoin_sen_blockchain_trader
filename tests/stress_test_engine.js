@@ -24,12 +24,18 @@ async function runStressTest(jobCount = 500) {
     const config = await prisma.tradeConfig.findFirst({
         where: {
             isOperating: true,
-            wallet: { isNot: null }
+            user: {
+                wallet: { isNot: null }
+            }
         },
-        include: { wallet: true }
+        include: { 
+            user: {
+                include: { wallet: true }
+            }
+        }
     });
 
-    if (!config || !config.wallet) {
+    if (!config || !config.user || !config.user.wallet) {
         console.error('❌ Nenhum usuário com TradeConfig + Wallet ativo encontrado.');
         process.exit(1);
     }
@@ -42,7 +48,7 @@ async function runStressTest(jobCount = 500) {
         data: { dryRun: true }
     });
 
-    const wallet = config.wallet;
+    const wallet = config.user.wallet;
 
     // 2. Load Generation
     console.log(`📦 Injetando ${jobCount} jobs na tradeQueue...`);
