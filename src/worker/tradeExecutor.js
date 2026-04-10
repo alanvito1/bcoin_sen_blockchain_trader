@@ -69,11 +69,21 @@ async function processTradeJob(job) {
 
   try {
     // 1. Fetch data from Prisma
-    const [user, config, walletData] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId } }),
-      prisma.tradeConfig.findUnique({ where: { id: tradeConfigId } }),
-      prisma.wallet.findUnique({ where: { id: walletId } })
-    ]);
+    let user, config, walletData;
+
+    if (walletId) {
+      [user, config, walletData] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId } }),
+        prisma.tradeConfig.findUnique({ where: { id: tradeConfigId } }),
+        prisma.wallet.findUnique({ where: { id: walletId } })
+      ]);
+    } else {
+      [user, config] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, include: { wallet: true } }),
+        prisma.tradeConfig.findUnique({ where: { id: tradeConfigId } })
+      ]);
+      walletData = user?.wallet;
+    }
 
     if (!user || !config || !walletData || !config.isOperating) {
       logger.info(`[TradeExecutor] User ${userId} or config not available/active.`);

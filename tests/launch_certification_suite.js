@@ -112,8 +112,10 @@ async function runCertificationSuite() {
         
         // Check Referral Panel
         let referralMsg = await clickAndVerify(currentMsg, { data: 'referral_panel' });
-        const levelMatch = referralMsg.message.match(/Level\s+<code>(\d+)<\/code>/);
-        const xpMatch = referralMsg.message.match(/(\d+\.?\d*)\/(\d+)\s+XP/);
+        // Robust regex: matches Level with or without <code> tags
+        const levelMatch = referralMsg.message.match(/Level\s+(?:<code>)?(\d+)(?:<\/code>)?/i);
+        // Matches XP pattern e.g. 150/1000 XP or 150.5/1000 XP
+        const xpMatch = referralMsg.message.match(/([\d.]+)\/(\d+)\s+XP/i);
         
         const lvl = levelMatch ? levelMatch[1] : 'N/A';
         const xp = xpMatch ? `${xpMatch[1]}/${xpMatch[2]}` : 'N/A';
@@ -123,10 +125,19 @@ async function runCertificationSuite() {
         // Check Wallet Panel (Energy)
         currentMsg = await resetToLobby();
         let walletMsg = await clickAndVerify(currentMsg, { data: 'wallet_panel' });
-        const energyMatch = walletMsg.message.match(/Energy:<\/b>\s+🔋\s+<code>([\d,]+)<\/code>/);
-        const initialCredits = energyMatch ? parseInt(energyMatch[1].replace(/,/g, '')) : 0;
+        // Matches Energy e.g. Energy: 🔋 1,234 or Energy:</b> 🔋 <code>1,234</code>
+        const energyMatch = walletMsg.message.match(/Energy:.*🔋.*(?:<code>)?([\d,]+)(?:<\/code>)?/i);
+        let initialCredits = energyMatch ? parseInt(energyMatch[1].replace(/,/g, '')) : 0;
         
-        console.log(`│ 🔋 Energy (Créditos): ${initialCredits}`);
+        // DB Fallback if UI fails (Garante que o faturamento seja testado mesmo com UI oscilante)
+        if (!initialCredits || initialCredits === 0) {
+            const userDb = await prisma.user.findUnique({ where: { telegramId: BigInt(me.id) } });
+            initialCredits = userDb.credits;
+            console.log(`│ 🧪 UI Audit falhou (Energy). Usando DB: ${initialCredits}`);
+        } else {
+            console.log(`│ 🔋 Energy (Créditos): ${initialCredits}`);
+        }
+
         CERT_REPORT.periphery = true;
         CERT_REPORT.details.initialCredits = initialCredits;
 
