@@ -166,7 +166,11 @@ async function getSignal(tokenPair, tradeConfig) {
     const lastPrice = candlesA[candlesA.length - 1].close;
     const prevPrice = candlesA[candlesA.length - 2].close;
 
-    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(${tfA}): ${maA?.toFixed(6)} | 📈 MA(${tfB}): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED (Bypassing filter)'}`);
+    const maA = calculateMA(candlesA, maPeriodA);
+    const maB = calculateMA(candlesB, maPeriodB);
+    const rsiValue = tradeConfig?.rsiEnabled ? calculateRSI(candlesA, tradeConfig.rsiPeriod) : null;
+
+    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(${tfA}): ${maA?.toFixed(6)} | 📈 MA(${tfB}): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED'}`);
 
     let signal = 'HOLD';
     let reason = 'Análise técnica concluída: Sem sinal claro de compra/venda.';
