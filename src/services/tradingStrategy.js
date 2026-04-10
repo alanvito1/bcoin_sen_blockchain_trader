@@ -131,6 +131,17 @@ async function fetchCandles(symbol, interval, limit = 100) {
  */
 async function getSignal(tokenPair, tradeConfig) {
   try {
+    // FORCE SIGNAL OVERRIDE (For Engine Validation)
+    if (tradeConfig?.forceSignal) {
+      logger.info(`[Strategy] 🎯 FORCE SIGNAL DETECTED: ${tradeConfig.forceSignal} for ${tokenPair}`);
+      return { 
+        signal: tradeConfig.forceSignal, 
+        reason: 'Manual Engine Trigger (QA Force Signal)', 
+        price: 0, // Will be fetched by executor/swapper if needed
+        strategyUsed: 'FORCE' 
+      };
+    }
+
     const symbol = tokenPair.replace('/', '');
     const sA = config.strategy.strategyA;
     const sB = config.strategy.strategyB;

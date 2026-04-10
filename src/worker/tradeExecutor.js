@@ -86,7 +86,20 @@ async function processTradeJob(job) {
       await sendUserNotification(user.telegramId, `🔍 <b>Passo 1/4:</b> Analisando indicadores para <code>${config.tokenPair}</code>...`, 'info', 'STEP');
     }
     
-    const result = await strategy.getSignal(config.tokenPair, config);
+    // Inject override check from job data
+    let result;
+    if (job.data.forceSignal) {
+        logger.info(`[TradeExecutor] ⚡ FORCE SIGNAL DETECTED: ${job.data.forceSignal}`);
+        result = { 
+            signal: job.data.forceSignal, 
+            price: 0, // Price will be fetched by swapper
+            reason: 'Engine Force Validation',
+            strategyUsed: job.data.forceStrategy || 'A'
+        };
+    } else {
+        result = await strategy.getSignal(config.tokenPair, config);
+    }
+
     if (result.signal === 'HOLD') {
       if (verbose) {
         await sendUserNotification(user.telegramId, `📊 <b>Status:</b> Ciclo concluído. Recomendação: <b>HOLD</b> (Aguardar).\n<i>Motivo: ${result.reason}</i>`, 'info', 'STEP');
