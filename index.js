@@ -44,6 +44,12 @@ try {
   console.log('  - Price Fetcher...');
   const priceFetcher = require('./src/worker/priceFetcher');
 
+  console.log('  - Payout Splitter...');
+  const { payoutWorker } = require('./src/worker/payoutWorker');
+
+  console.log('  - Transit Monitor...');
+  const { checkTransitIntegrity } = require('./src/worker/monitorWorker');
+
   console.log('✅ [System] All Workers Initialized.');
 } catch (workerErr) {
   console.error('💥 [FATAL] Worker Initialization Failed:');

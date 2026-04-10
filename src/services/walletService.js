@@ -87,7 +87,54 @@ async function importExistingWallet(userId, privateKey, network = "POLYGON") {
   }
 }
 
+async function getOrCreateTransitWallet() {
+  const secret = await prisma.systemSecret.findUnique({
+    where: { key: 'TRANSIT_WALLET' }
+  });
+
+  if (secret) {
+    const pk = encryption.decrypt({
+      encryptedData: secret.encryptedValue,
+      iv: secret.iv,
+      authTag: secret.authTag
+    });
+    const wallet = new Wallet(pk);
+    return { address: wallet.address, privateKey: pk };
+  }
+
+  // Create new autonomous wallet
+  const wallet = Wallet.createRandom();
+  const encrypted = encryption.encrypt(wallet.privateKey);
+
+  await prisma.systemSecret.create({
+    data: {
+      key: 'TRANSIT_WALLET',
+      encryptedValue: encrypted.encryptedData,
+      iv: encrypted.iv,
+      authTag: encrypted.authTag
+    }
+  });
+
+  return { address: wallet.address, privateKey: wallet.privateKey };
+}
+
+async function revealTransitWallet() {
+  const secret = await prisma.systemSecret.findUnique({
+    where: { key: 'TRANSIT_WALLET' }
+  });
+
+  if (!secret) return null;
+
+  return encryption.decrypt({
+    encryptedData: secret.encryptedValue,
+    iv: secret.iv,
+    authTag: secret.authTag
+  });
+}
+
 module.exports = {
   generateNewWallet,
-  importExistingWallet
+  importExistingWallet,
+  getOrCreateTransitWallet,
+  revealTransitWallet
 };

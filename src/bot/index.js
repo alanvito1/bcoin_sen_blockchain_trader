@@ -83,11 +83,10 @@ try {
   const { statusHandler, historyHandler } = require('./features/status');
 
   const { 
-    adminHandler, 
-    adminToolsHandler, 
-    clearStuckHandler, 
     adminStatusHandler,
-    dbHealthHandler 
+    dbHealthHandler,
+    rotateTransitWalletHandler,
+    revealTransitWalletHandler
   } = require('./commands/admin');
 
   const { supportPanelHandler, supportWizard } = require('./features/support');
@@ -145,6 +144,8 @@ try {
   register('command', 'status', statusHandler);
   register('command', 'historico', historyHandler);
   register('command', 'ajuda', supportPanelHandler);
+  register('command', 'rotate_wallet', rotateTransitWalletHandler);
+  register('command', 'reveal_transit', revealTransitWalletHandler);
   register('command', 'cancel', async (ctx) => {
     await ctx.scene.leave();
     return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');

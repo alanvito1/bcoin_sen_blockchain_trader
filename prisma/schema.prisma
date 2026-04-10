@@ -154,3 +154,25 @@ model SupportTicket {
   @@index([userId])
   @@index([status])
 }
+
+model PayoutLog {
+  id           String   @id @default(uuid())
+  buyerId      String
+  referrerId   String?
+  network      String
+  amountGross  Float
+  gasDeducted  Float    @default(0.0)
+  adminNet     Float
+  referrerNet  Float    @default(0.0)
+  payoutTxHash String?
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+}
+
+model SystemSecret {
+  id             String @id @default(uuid())
+  key            String @unique
+  encryptedValue String
+  iv             String
+  authTag        String
+}

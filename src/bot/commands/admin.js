@@ -3,6 +3,9 @@ const prisma = require('../../config/prisma');
 const { tradeQueue } = require('../../config/queue');
 const AdminService = require('../../services/adminService');
 const { adminStatusHandler } = require('./adminStatus');
+const { getOrCreateTransitWallet, revealTransitWallet } = require('../../services/walletService');
+const encryption = require('../../utils/encryption');
+const { Wallet } = require('ethers');
 
 const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID;
 
@@ -37,6 +40,61 @@ async function adminHandler(ctx) {
   } catch (error) {
     console.error('[Admin] Error:', error);
     return ctx.reply('❌ Erro ao buscar métricas.');
+  }
+}
+
+async function rotateTransitWalletHandler(ctx) {
+  if (ctx.from.id.toString() !== ADMIN_ID?.toString()) return;
+
+  await ctx.reply('⏳ Gerando nova carteira de transição e atualizando segredos...');
+
+  try {
+    const newWallet = Wallet.createRandom();
+    const encrypted = encryption.encrypt(newWallet.privateKey);
+
+    await prisma.systemSecret.upsert({
+      where: { key: 'TRANSIT_WALLET' },
+      update: {
+        encryptedValue: encrypted.encryptedData,
+        iv: encrypted.iv,
+        authTag: encrypted.authTag
+      },
+      create: {
+        key: 'TRANSIT_WALLET',
+        encryptedValue: encrypted.encryptedData,
+        iv: encrypted.iv,
+        authTag: encrypted.authTag
+      }
+    });
+
+    return ctx.replyWithHTML(
+      `✅ <b>Carteira de Transição Rotacionada!</b>\n\n` +
+      `Novo Endereço: <code>${newWallet.address}</code>\n` +
+      `A carteira anterior foi invalidada para novos recebimentos.`
+    );
+  } catch (error) {
+    return ctx.reply(`❌ Erro ao rotacionar: ${error.message}`);
+  }
+}
+
+async function revealTransitWalletHandler(ctx) {
+  if (ctx.from.id.toString() !== ADMIN_ID?.toString()) return;
+
+  try {
+    const pk = await revealTransitWallet();
+    if (!pk) return ctx.reply('⚠️ Nenhuma carteira de transição encontrada.');
+
+    const wallet = new Wallet(pk);
+    const text = 
+      `🚨 <b>CHAVE PRIVADA - TRANSIT WALLET</b>\n` +
+      `Use APENAS para resgate manual de emergência.\n\n` +
+      `Endereço: <code>${wallet.address}</code>\n` +
+      `Chave Privada: <code>${pk}</code>\n\n` +
+      `<b>AVISO:</b> APAGUE ESTA MENSAGEM APÓS O USO.`;
+
+    return ctx.replyWithHTML(text);
+  } catch (error) {
+    return ctx.reply(`❌ Erro ao revelar: ${error.message}`);
   }
 }
 
@@ -128,5 +186,7 @@ module.exports = {
   adminToolsHandler,
   clearStuckHandler,
   adminStatusHandler,
-  dbHealthHandler
+  dbHealthHandler,
+  rotateTransitWalletHandler,
+  revealTransitWalletHandler
 };

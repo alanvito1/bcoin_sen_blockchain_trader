@@ -598,7 +598,11 @@ async function startBotHandler(ctx) {
   await ctx.answerCbQuery('🚀 Motor iniciado!');
   
   // Notification to chat
-  await sendUserNotification(ctx.from.id, `🚀 <b>Motor Ligado:</b> ${config.network} - ${config.tokenPair}\nEstratégia: ${config.strategy30m ? 'A' : ''}${config.strategy30m && config.strategy4h ? ' + ' : ''}${config.strategy4h ? 'B' : ''}`, 'success', 'TRADE');
+  const msg = `🟢 <b>MOTOR ${config.network} [${config.tokenPair}] ATIVADO!</b>\n\n` +
+               `Seu cofre foi conectado com sucesso e o radar tático está aguardando o próximo sinal de compra/venda.\n\n` +
+               `<i>Logs táticos serão enviados conforme suas preferências.</i>`;
+  
+  await sendUserNotification(ctx.from.id, msg, 'success', 'TRADE');
   
   return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
 }
