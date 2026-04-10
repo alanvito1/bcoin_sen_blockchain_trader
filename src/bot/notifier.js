@@ -25,7 +25,9 @@ async function sendUserNotification(telegramId, message, type = 'info', category
     }
 
     const formattedMessage = formatMessage(message, type);
+    logger.info(`[Notifier] 📨 Sending to ${telegramId}: ${message.slice(0, 50)}...`);
     await bot.telegram.sendMessage(telegramId, formattedMessage, { parse_mode: 'HTML' });
+    logger.info(`[Notifier] ✅ Sent successfully to ${telegramId}`);
   } catch (error) {
     if (error.description && error.description.includes('bot was blocked by the user')) {
       console.warn(`[Notifier] User ${telegramId} blocked the bot. Updating visibility.`);

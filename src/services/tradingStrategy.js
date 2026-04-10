@@ -78,7 +78,7 @@ function calculateRSI(candles, period) {
  * @param {number} [limit=100] - Number of candles to retrieve.
  * @returns {Promise<Array<Object>>} Normalized candle array [{close, time}].
  */
-async function fetchCandles(symbol, interval, limit = 100) {
+async function fetchCandles(symbol, interval, limit = 50) {
     const tokenPair = symbol.includes('/') ? symbol : (symbol === 'BCOINUSDT' ? 'BCOIN/USDT' : (symbol === 'SENUSDT' ? 'SEN/USDT' : symbol));
     const network = symbol.includes('SEN') ? 'POLYGON' : 'BSC'; 
     const tf = TIMEFRAME_MAP[interval] || TIMEFRAME_MAP['30m'];
