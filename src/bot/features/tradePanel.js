@@ -598,11 +598,11 @@ async function startBotHandler(ctx) {
   await ctx.answerCbQuery('🚀 Motor iniciado!');
   
   // Notification to chat
-  const msg = `🟢 <b>MOTOR ${config.network} [${config.tokenPair}] ATIVADO!</b>\n\n` +
-               `Seu cofre foi conectado com sucesso e o radar tático está aguardando o próximo sinal de compra/venda.\n\n` +
-               `<i>Logs táticos serão enviados conforme suas preferências.</i>`;
+  const msg = `✅ <b>Motor ${config.network} [${config.tokenPair}] acionado!</b>\n\n` +
+               `Iniciando varredura tática e aguardando o próximo sinal de detonação.\n\n` +
+               `<i>O sinal de vida foi estabelecido. Operação em curso...</i>`;
   
-  await sendUserNotification(ctx.from.id, msg, 'success', 'TRADE');
+  await sendUserNotification(ctx.from.id, msg, 'success', 'INFO'); // Category INFO bypasses TRADE filters
   
   return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
 }

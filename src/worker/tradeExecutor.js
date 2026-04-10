@@ -315,6 +315,16 @@ async function processTradeJob(job) {
     const errorMsg = err.message || 'Unknown Error';
     logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${errorMsg}`);
     
+    // Attempt recovery of user data if not already fetched
+    let targetId = userId;
+    let targetTelegramId;
+    try {
+      const u = await prisma.user.findUnique({ where: { id: userId } });
+      targetTelegramId = u?.telegramId;
+    } catch (e) {
+      logger.error(`[TradeExecutor] Could not fetch telegramId for error report: ${e.message}`);
+    }
+
     // Save FAILED trade to history for auditing
     if (userId) {
       try {
@@ -330,8 +340,8 @@ async function processTradeJob(job) {
           }
         });
         
-        if (user?.telegramId) {
-          await sendUserNotification(user.telegramId, `❌ <b>Falha no Trade</b>\nPar: ${config?.tokenPair || 'N/A'}\nErro: <code>${errorMsg}</code>`, 'error');
+        if (targetTelegramId) {
+          await sendUserNotification(targetTelegramId, `🚨 <b>Falha Crítica no Motor</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>\n\n<i>Auditando logs para auto-recuperação...</i>`, 'error', 'INFO');
         }
       } catch (dbErr) {
         logger.error(`[TradeExecutor] Could not log failure: ${dbErr.message}`);

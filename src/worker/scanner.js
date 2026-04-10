@@ -47,18 +47,27 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       const isAdmin = adminTelegramId && user.telegramId === adminTelegramId;
       
       if (!isAdmin && !isSubscribed && !possessesCredits) {
+        logger.warn(`[Scanner] User ${user.telegramId} skipped: No credits/subscription.`);
         return false;
       }
-
+ 
       // Gate B: Schedule
+      let isScheduled = false;
       if (config.scheduleMode === 'interval') {
-        return currentMinute % config.intervalMinutes === 0;
+        isScheduled = currentMinute % (config.intervalMinutes || 60) === 0;
+        if (!isScheduled) {
+          logger.debug(`[Scanner] User ${user.telegramId} [${config.network}] skipped: Next interval at ${Math.ceil(currentMinute / config.intervalMinutes) * config.intervalMinutes}m (Current: ${currentMinute}m)`);
+        }
       } else {
         // Window Mode (Default: runs every minute between Min and Max)
         const inWindow1 = currentMinute >= (config.window1Min || 0) && currentMinute <= (config.window1Max || 0);
         const inWindow2 = currentMinute >= (config.window2Min || 0) && currentMinute <= (config.window2Max || 0);
-        return inWindow1 || inWindow2;
+        isScheduled = inWindow1 || inWindow2;
+        if (!isScheduled) {
+          logger.debug(`[Scanner] User ${user.telegramId} [${config.network}] skipped: Outside windows [${config.window1Min}-${config.window1Max}] and [${config.window2Min}-${config.window2Max}] at ${currentMinute}m`);
+        }
       }
+      return isScheduled;
     });
 
     if (filteredConfigs.length > 0) {

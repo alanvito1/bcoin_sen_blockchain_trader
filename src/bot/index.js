@@ -197,8 +197,59 @@ try {
   
   // Multi-engine / Generic Actions
   bot.action(/^manage_(.+)_(.+)$/, (ctx) => engineConfigHandler(ctx, ctx.match[1], ctx.match[2]));
+  bot.action('manage_engine', async (ctx) => {
+    const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+    if (!config) return ctx.answerCbQuery('⚠️ Bomba não selecionada.');
+    return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
+  });
+
   bot.action('update_pair', selectPairHandler);
   bot.action(/^set_pair_(.+)$/, (ctx) => setPairHandler(ctx, ctx.match[1]));
+  
+  // Strategy & Menu Navigation
+  bot.action('setup_strategy_a', setupStrategyAMenu);
+  bot.action('setup_strategy_b', setupStrategyBMenu);
+  bot.action('setup_schedule', setupScheduleMenu);
+  bot.action('setup_rsi', setupRsiMenu);
+  bot.action('strategy_selector', strategySelectorMenu);
+  bot.action('setup_windows', setupWindowsMenu);
+  bot.action('toggle_rsi', toggleRsi);
+  bot.action('toggle_mev', toggleMev);
+
+  // Timeframe Setters
+  bot.action(/^set_tf_a_(.+)$/, (ctx) => setTimeframe(ctx, 'timeframeA', ctx.match[1], setupStrategyAMenu));
+  bot.action(/^set_tf_b_(.+)$/, (ctx) => setTimeframe(ctx, 'timeframeB', ctx.match[1], setupStrategyBMenu));
+  bot.action('select_tf_a', timeframeSelectorA);
+  bot.action('select_tf_b', timeframeSelectorB);
+
+  // Strategy Presets
+  bot.action('set_strategy_none', (ctx) => setStrategyPreset(ctx, false, false));
+  bot.action('set_strategy_30m', (ctx) => setStrategyPreset(ctx, true, false));
+  bot.action('set_strategy_4h', (ctx) => setStrategyPreset(ctx, false, true));
+  bot.action('set_strategy_both', (ctx) => setStrategyPreset(ctx, true, true));
+
+  // Schedule Presets
+  bot.action('set_schedule_window', (ctx) => setScheduleMode(ctx, 'window'));
+  bot.action('set_schedule_interval', (ctx) => setScheduleMode(ctx, 'interval'));
+  bot.action(/^set_interval_(\d+)$/, (ctx) => setIntervalPreset(ctx, parseInt(ctx.match[1])));
+
+  // Numeric Field Editors (Generic Regex)
+  bot.action(/^edit_(.+)$/, async (ctx) => {
+    const field = ctx.match[1];
+    const labels = {
+      buyAmountA: 'Compra A', sellAmountA: 'Venda A', maPeriodA: 'MA A',
+      buyAmountB: 'Compra B', sellAmountB: 'Venda B', maPeriodB: 'MA B',
+      intervalMinutes: 'Intervalo', slippage: 'Precisão', rsiPeriod: 'Período RSI',
+      window1Min: 'Início J1', window1Max: 'Fim J1', window2Min: 'Início J2', window2Max: 'Fim J2'
+    };
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('UPDATE_CONFIG_SCENE', { 
+      field, 
+      label: labels[field] || field, 
+      engineId: ctx.session.selectedEngineId 
+    });
+  });
+
   bot.action('start_bot', startBotHandler);
   bot.action('pause_bot', stopBotHandler);
   
