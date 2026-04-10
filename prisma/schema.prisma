@@ -99,6 +99,9 @@ model TradeConfig {
   dryRun              Boolean   @default(false)
   lastOperationAt     DateTime?
   lastOperationWindow Int?
+  antiRugEnabled      Boolean   @default(false)
+  autoSellEnabled     Boolean   @default(false)
+  priorityMode        String    @default("Aggressive")
   user                User      @relation(fields: [userId], references: [id])
 
   @@unique([userId, network, tokenPair])

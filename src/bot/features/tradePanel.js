@@ -223,7 +223,7 @@ async function engineConfigHandler(ctx, network, token) {
     [Markup.button.callback(`🔥 Explosivo A (${tfA})`, 'setup_strategy_a'), Markup.button.callback(`💥 Explosivo B (${tfB})`, 'setup_strategy_b')],
     [Markup.button.callback('⏲️ Timer de Detonação', 'setup_schedule'), Markup.button.callback(`🎯 Precisão: ${config.slippage}%`, 'edit_slippage')],
     [Markup.button.callback(`📊 RSI: ${rsiStr}`, 'setup_rsi'), Markup.button.callback(`🛡️ MEV: ${config.antiSandwichEnabled ? 'ON' : 'OFF'}`, 'toggle_mev')],
-    [Markup.button.callback(`🔀 Modos: ${stratLabel}`, 'strategy_selector')],
+    [Markup.button.callback(`🔀 Modos: ${stratLabel}`, 'strategy_selector'), Markup.button.callback('🛡️ Proteções & Gás', 'setup_settings')],
     [config.isOperating
       ? Markup.button.callback('🔴 RECOLHER BOMBA', 'pause_bot')
       : Markup.button.callback('🟢 PLANTAR BOMBA', 'start_bot')],
@@ -656,7 +656,72 @@ async function toggleMev(ctx) {
     data: { antiSandwichEnabled: newValue },
   });
   await ctx.answerCbQuery(`Anti-Sandwich ${newValue ? 'ATIVADO' : 'DESATIVADO'}`);
-  return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
+  return setupSettingsMenu(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Advanced Protections & Gas Settings
+// ---------------------------------------------------------------------------
+
+async function setupSettingsMenu(ctx) {
+  const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+  const token = config.tokenPair.split('/')[0];
+
+  const text =
+    `🛡️ <b>Arena &gt; ${config.network} &gt; ${token} &gt; Segurança & Gás</b>\n\n` +
+    `Reforce as proteções da sua bomba contra ataques de terceiros:\n\n` +
+    `• <b>Modo Gás:</b> Define a agressividade do suborno aos validadores.\n` +
+    `• <b>Anti-Rug:</b> Tenta abortar trades se detectar remoção de liquidez.\n` +
+    `• <b>Auto-Sell:</b> Realiza lucros automaticamente em picos de preço.`;
+
+  const buttons = [
+    [Markup.button.callback(`⛽ Gás: ${config.priorityMode || 'Aggressive'}`, 'toggle_priority')],
+    [Markup.button.callback(`🎯 Precisão (Slippage): ${config.slippage}%`, 'toggle_slippage')],
+    [Markup.button.callback(`${config.antiRugEnabled ? '🟢' : '🔴'} Proteção Anti-Rug`, 'toggle_anti_rug')],
+    [Markup.button.callback(`${config.autoSellEnabled ? '🟢' : '🔴'} Auto-Sell (Lucro)`, 'toggle_auto_sell')],
+    [Markup.button.callback(`${config.antiSandwichEnabled ? '🟢' : '🔴'} Anti-Sandwich (MEV)`, 'toggle_mev')],
+    [Markup.button.callback('⬅️ Voltar', 'manage_engine')],
+  ];
+
+  return ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+}
+
+async function toggleAntiRug(ctx) {
+  const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+  const newValue = !config.antiRugEnabled;
+  await prisma.tradeConfig.update({ where: { id: config.id }, data: { antiRugEnabled: newValue } });
+  await ctx.answerCbQuery(`Anti-Rug: ${newValue ? 'LIGADO' : 'DESLIGADO'}`);
+  return setupSettingsMenu(ctx);
+}
+
+async function toggleAutoSell(ctx) {
+  const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+  const newValue = !config.autoSellEnabled;
+  await prisma.tradeConfig.update({ where: { id: config.id }, data: { autoSellEnabled: newValue } });
+  await ctx.answerCbQuery(`Auto-Sell: ${newValue ? 'LIGADO' : 'DESLIGADO'}`);
+  return setupSettingsMenu(ctx);
+}
+
+async function togglePriority(ctx) {
+  const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+  const modes = ['Standard', 'Aggressive'];
+  const currentIdx = modes.indexOf(config.priorityMode || 'Aggressive');
+  const nextMode = modes[(currentIdx + 1) % modes.length];
+  
+  await prisma.tradeConfig.update({ where: { id: config.id }, data: { priorityMode: nextMode } });
+  await ctx.answerCbQuery(`Gás ajustado para: ${nextMode}`);
+  return setupSettingsMenu(ctx);
+}
+
+async function toggleSlippage(ctx) {
+  const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
+  const levels = [0.5, 1.0, 3.0, 5.0];
+  const currentIdx = levels.indexOf(config.slippage);
+  const nextLevel = levels[(currentIdx + 1) % levels.length] || 1.0;
+  
+  await prisma.tradeConfig.update({ where: { id: config.id }, data: { slippage: nextLevel } });
+  await ctx.answerCbQuery(`Precisão: ${nextLevel}%`);
+  return setupSettingsMenu(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -687,4 +752,9 @@ module.exports = {
   setScheduleMode,
   setIntervalPreset,
   toggleMev,
+  toggleAntiRug,
+  toggleAutoSell,
+  setupSettingsMenu,
+  toggleSlippage,
+  togglePriority,
 };

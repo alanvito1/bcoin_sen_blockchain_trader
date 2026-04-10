@@ -53,8 +53,8 @@ try {
     setScheduleMode,
     setIntervalPreset,
     toggleMev,
-    toggleAutoSell,
     toggleAntiRug,
+    toggleAutoSell,
     setupSettingsMenu,
     toggleSlippage,
     togglePriority,
@@ -215,6 +215,11 @@ try {
   bot.action('setup_windows', setupWindowsMenu);
   bot.action('toggle_rsi', toggleRsi);
   bot.action('toggle_mev', toggleMev);
+  bot.action('toggle_anti_rug', toggleAntiRug);
+  bot.action('toggle_auto_sell', toggleAutoSell);
+  bot.action('setup_settings', setupSettingsMenu);
+  bot.action('toggle_slippage', toggleSlippage);
+  bot.action('toggle_priority', togglePriority);
 
   // Timeframe Setters
   bot.action(/^set_tf_a_(.+)$/, (ctx) => setTimeframe(ctx, 'timeframeA', ctx.match[1], setupStrategyAMenu));
