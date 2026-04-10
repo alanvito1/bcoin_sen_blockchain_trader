@@ -104,7 +104,7 @@ async function processTradeJob(job) {
         logger.info(`[TradeExecutor] ⚡ FORCE SIGNAL DETECTED: ${job.data.forceSignal}`);
         result = { 
             signal: job.data.forceSignal, 
-            price: 0, // Price will be fetched by swapper
+            price: job.data.forcePrice || 0, // Bypass fetch if provided
             reason: 'Engine Force Validation',
             strategyUsed: job.data.forceStrategy || 'A'
         };
@@ -157,13 +157,27 @@ async function processTradeJob(job) {
     }
 
     const provider = new JsonRpcProvider(networkInfo.rpc);
-    wallet = new Wallet(privateKey, provider);
+    
+    // Nonce Manager Cache to prevent concurrent tx nonce collision (Death Loop)
+    if (!global.walletNonceCache) global.walletNonceCache = new Map();
+    const cacheKey = `${userId}-${config.network}`;
+    
+    if (!global.walletNonceCache.has(cacheKey)) {
+        const { NonceManager } = require('ethers');
+        const baseWallet = new Wallet(privateKey, provider);
+        const manager = new NonceManager(baseWallet);
+        manager.address = baseWallet.address;
+        manager.privateKey = privateKey;
+        global.walletNonceCache.set(cacheKey, manager);
+    }
+    wallet = global.walletNonceCache.get(cacheKey);
     
     // 5. Pre-trade Balance Check
     const isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
     if (verbose) {
       await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '💰 '}<b>Passo 2/4:</b> Verificando saldo e taxas na rede <code>${config.network}</code>...`, 'info', 'STEP');
     }
+
     
     if (isDryRun) {
       logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
@@ -201,7 +215,9 @@ async function processTradeJob(job) {
     if (isDryRun) {
       logger.info(`[TradeExecutor] DRY RUN: EXECUTING MOCK ${result.signal} for ${userId} @ ${result.price}`);
       txHash = `DRY_RUN_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const delay = job.data.isStressTest ? 10 : 1500;
+      await new Promise(resolve => setTimeout(resolve, delay));
     } else {
       logger.info(`[TradeExecutor] EXECUTING REAL ${result.signal} for ${userId} @ ${result.price} (Amount: ${executionAmount})`);
       
@@ -255,7 +271,8 @@ async function processTradeJob(job) {
     logger.info(`[TradeExecutor] Trade ${isDryRun ? 'Simulation' : 'Realized'} for ${userId}. Hash: ${txHash}`);
 
     // 8. Asset Management (Transfer surplus to TARGET_ADDRESS for SEN token)
-    if (config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
+    // 🛠️ Optimization: Skip on-chain calls during stress tests
+    if (!job.data.isStressTest && config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
       const { ethers: ethersObj } = require('ethers');
       const networkBase = globalConfig.networks[netKey];
       const SEN_ADDRESS = networkBase.tokens.find(t => t.symbol === 'SEN')?.address;

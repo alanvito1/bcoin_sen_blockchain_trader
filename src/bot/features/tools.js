@@ -9,15 +9,18 @@ const { formatUnits } = require('ethers');
 async function toolsPanelHandler(ctx) {
   const text = `🛠️ <b>POWER-UPS & UTILITÁRIOS</b>\n\n` +
     `Escolha um item para sua jornada na arena:\n\n` +
-    `• ⛽ <b>Radar de Gás:</b> Taxa de rede atual.\n` +
-    `• 📈 <b>Gemas:</b> Preço real dos tokens.\n` +
-    `• 🛡️ <b>Escudos:</b> Revogue permissões.\n` +
-    `• 🔍 <b>Scanner:</b> Analise contratos sussurrados.`;
+    `• ⛽ <b>Radar de Gás:</b> Taxa de rede.\n` +
+    `• 📈 <b>Gemas:</b> Cotação Real-time.\n` +
+    `• 🛡️ <b>Escudos:</b> Revogue permissões.\n\n` +
+    `🛠️ <b>UPGRADES DISPONÍVEIS EM BREVE:</b>\n` +
+    `• 🛡️ <i>MEV Shield Pro:</i> Proteção total contra Front-run.\n` +
+    `• ⚡ <i>Auto-Compound:</i> Reinvestimento de recompensas.\n` +
+    `• 🎯 <i>Snipe Launch:</i> Detone no bloco 0.`;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('⛽ Radar de Gás (Real-time)', 'tool_gas_price')],
-    [Markup.button.callback('📈 Preço das Gemas', 'tool_price_list')],
+    [Markup.button.callback('⛽ Radar de Gás', 'tool_gas_price'), Markup.button.callback('📈 Preços', 'tool_price_list')],
     [Markup.button.callback('🛡️ Escudos & Segurança', 'tool_security')],
+    [Markup.button.callback('⚡ Auto-Compound (Locked)', 'tool_coming_soon'), Markup.button.callback('🎯 Snipe (Locked)', 'tool_coming_soon')],
     [Markup.button.callback('⬅️ Voltar ao Lobby', 'start_panel')]
   ]);
 
@@ -107,9 +110,14 @@ async function securityToolHandler(ctx) {
   return ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
 }
 
+async function comingSoonHandler(ctx) {
+  return ctx.answerCbQuery('🔒 Este Power-up está em fase de homologação e será liberado no Stage 2!', { show_alert: true });
+}
+
 module.exports = {
   toolsPanelHandler,
   gasPriceHandler,
   priceListHandler,
-  securityToolHandler
+  securityToolHandler,
+  comingSoonHandler
 };

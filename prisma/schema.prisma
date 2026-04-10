@@ -36,6 +36,7 @@ model User {
   referredBy            User?          @relation("Referral", fields: [referredById], references: [id])
   referrals             User[]         @relation("Referral")
   wallet                Wallet?
+  supportTickets        SupportTicket[]
 }
 
 model CommissionLog {
@@ -139,4 +140,17 @@ model CustomToken {
   createdAt DateTime @default(now())
 
   @@index([network, address])
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  category  String
+  message   String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
 }

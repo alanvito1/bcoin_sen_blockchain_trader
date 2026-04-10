@@ -9,8 +9,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-autotrader}
-    ports:
-      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,8 +21,7 @@ services:
     image: redis:7-alpine
     container_name: trader-redis
     restart: unless-stopped
-    ports:
-      - "6380:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes:
       - redisdata:/data
     healthcheck:
@@ -47,9 +44,10 @@ services:
       - ./.env:/app/.env
       - ./src:/app/src
       - ./tests:/app/tests
+      - ./prisma:/app/prisma
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-autotrader}?schema=public
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     # Healthcheck is defined in Dockerfile, but we can override or re-assert here
     healthcheck:
       test: ["CMD-SHELL", "node src/health.js"]

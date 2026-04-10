@@ -57,7 +57,7 @@ async function startHandler(ctx) {
   // --- TERMS GATE ---
   if (!user.hasAcceptedTerms) {
     const termsKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✅ ACEITAR E JOGAR', 'accept_terms')],
+      [Markup.button.callback('✅ Eu Aceito os Riscos', 'accept_terms')],
       [Markup.button.callback('❌ DESISTIR', 'refuse_terms')]
     ]);
 
@@ -107,7 +107,7 @@ async function startHandler(ctx) {
 
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('🕹️ Arena de Trade (Bombas)', 'trade_panel'), Markup.button.callback('🎒 Meu Inventário', 'wallet_panel')],
-    [Markup.button.callback('🏪 Item Shop', 'store_panel'), Markup.button.callback('🛠️ Power-ups', 'tools_panel')],
+    [Markup.button.callback('🏪 Item Shop', 'store_panel')],
     [Markup.button.callback('🎁 Multiplayer (Convite)', 'referral_panel')],
     [Markup.button.callback('📖 Manual do Jogo', 'quick_guide'), Markup.button.callback('🛠️ Suporte Técnico', 'support_link')]
   ]);

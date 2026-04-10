@@ -20,7 +20,7 @@ dotenv.config();
 
 // Configurações Globais
 const apiId = parseInt(process.env.API_ID);
-const apiHash = (process.env.API_HASH || '').replace(/['"]/g, '');
+const apiHash = (process.env.API_HASH || '').replace(/['"\s]/g, '');
 
 if (!apiId || !apiHash) {
     console.error('❌ ERRO: API_ID ou API_HASH não encontrados no ambiente!');
@@ -28,8 +28,9 @@ if (!apiId || !apiHash) {
     process.exit(1);
 }
 
-const sessionString = (process.env.QA_SESSION_STRING || '').replace(/['"]/g, '');
-const botUsername = (process.env.TELEGRAM_BOT_USERNAME || '@BCOIN_n_SEN_bot').replace(/['"]/g, '');
+// Robust cleaning of session string (remove quotes and whitespace)
+const sessionString = (process.env.QA_SESSION_STRING || '').replace(/['"\s]/g, '');
+const botUsername = (process.env.TELEGRAM_BOT_USERNAME || '@BCOIN_n_SEN_bot').replace(/['"\s]/g, '');
 const STRICT_PROD = process.env.STRICT_PROD === 'true';
 
 const CERT_REPORT = {
@@ -265,15 +266,22 @@ async function runCertificationSuite() {
     } catch (err) {
         console.error('\n💥 ERRO CRÍTICO NA SUITE:', err);
     } finally {
-        // --- TEARDOWN ---
+        // --- TEARDOWN (Safe) ---
         console.log('\n🧹 [TEARDOWN] State Cleanup final...');
-        await prisma.tradeConfig.updateMany({
-            where: { user: { telegramId: BigInt((await client.getMe()).id) } },
-            data: { isOperating: false }
-        }).catch(() => {});
+        try {
+            const me = await client.getMe().catch(() => null);
+            if (me) {
+                await prisma.tradeConfig.updateMany({
+                    where: { user: { telegramId: BigInt(me.id) } },
+                    data: { isOperating: false }
+                });
+            }
+        } catch (fErr) {
+            // Silently fail teardown if db/client is gone
+        }
         
-        await client.disconnect();
-        await prisma.$disconnect();
+        await client.disconnect().catch(() => {});
+        await prisma.$disconnect().catch(() => {});
 
         // RELATÓRIO FINAL
         console.log('\n=============================================================');
@@ -296,4 +304,7 @@ async function runCertificationSuite() {
     }
 }
 
-runCertificationSuite();
+runCertificationSuite().catch(err => {
+    console.error('❌ ERRO NO BOOTSTRAP DA SUITE:', err);
+    process.exit(1);
+});

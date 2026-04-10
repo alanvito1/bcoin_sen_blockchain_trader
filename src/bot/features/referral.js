@@ -12,8 +12,12 @@ async function referralPanelHandler(ctx) {
     await ctx.answerCbQuery().catch(() => {});
   }
   const telegramId = BigInt(ctx.from.id);
+  const user = await prisma.user.findUnique({ 
+    where: { telegramId },
+    include: { referrals: true }
+  });
 
-  if (!user.referralCode) {
+  if (!user || !user.referralCode) {
     return ctx.reply('❌ Seu código de indicação ainda não foi gerado. Digite /start para atualizar.');
   }
 

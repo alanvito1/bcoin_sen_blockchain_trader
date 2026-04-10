@@ -9,11 +9,12 @@ const levelingService = require('../../services/levelingService');
 const PACKAGES = [
   { id: 'p1', name: '🔋 1.000 Fire-Charges', price: 10, credits: 1000 },
   { id: 'p2', name: '🔋 5.000 Fire-Charges', price: 40, credits: 5000 },
-  { id: 'mrr', name: '💎 BOMB-PASS VIP (Infinita)', price: 29, credits: 0, isSubscription: true }
+  { id: 'mrr', name: '💎 BOMB-PASS VIP (30 Dias)', price: 29, credits: 0, isSubscription: true }
 ];
 
 async function storePanelHandler(ctx) {
-  const text = '🏪 <b>Item Shop: Batalha & Survival</b>\nAbasteça seu estoque de Fire-Charges para continuar detonando na arena.\n\nEscolha um power-up:';
+  const text = '🏪 <b>Item Shop: Batalha & Survival</b>\nAbasteça seu estoque de Fire-Charges para continuar detonando na arena.\n\n' +
+    '⚠️ <b>NOTA:</b> O Bomb-Pass VIP tem validade de <b>30 dias corridos</b>. Após este período, é necessária a renovação para manter os benefícios ilimitados.\n\nEscolha um power-up:';
   
   const buttons = PACKAGES.map(p => ([
     Markup.button.callback(`${p.name} - $${p.price}`, `buy_package_${p.id}`)

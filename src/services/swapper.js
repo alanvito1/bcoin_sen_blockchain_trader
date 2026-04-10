@@ -279,8 +279,8 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
       // Calculate the 'Fair Price Floor' (The minimum we accept based on global market price)
       const fairOut = direction === 'buy'
-        ? ethers.parseUnits(fairOutNum.toString(), tokenConfig.decimals)
-        : ethers.parseUnits(fairOutNum.toString(), 18);
+        ? ethers.parseUnits(fairOutNum.toFixed(tokenConfig.decimals), tokenConfig.decimals)
+        : ethers.parseUnits(fairOutNum.toFixed(18), 18);
       
       amountOutMin = (fairOut * (10000n - BigInt(Math.floor(dynamicTolerance * 100)))) / 10000n;
     } else {

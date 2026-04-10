@@ -90,8 +90,8 @@ try {
     dbHealthHandler 
   } = require('./commands/admin');
 
-  const { supportPanelHandler, reportIssueHandler } = require('./features/support');
-  const { toolsPanelHandler, gasPriceHandler, priceListHandler, securityToolHandler } = require('./features/tools');
+  const { supportPanelHandler, supportWizard } = require('./features/support');
+  const { manualPanelHandler } = require('./features/manual');
   const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
 
   // 4. Initialization Logic
@@ -104,12 +104,12 @@ try {
   console.log('[INIT] Telegraf instantiated successfully.');
 
   // 5. Scenes Stage setup
-  const stage = new Scenes.Stage([
     importWalletScene,
     disconnectWalletScene,
     updateConfigScene,
     addTokenScene,
-    setupPayoutAddressScene
+    setupPayoutAddressScene,
+    supportWizard
   ]);
 
   // 6. Apply Middlewares
@@ -159,6 +159,20 @@ try {
   register('action', 'setup_strategy_b', setupStrategyBMenu);
   register('action', 'setup_windows', setupWindowsMenu);
   register('action', 'setup_pair_menu', setupPairMenu);
+  register('action', 'support_link', supportPanelHandler);
+  register('action', 'quick_guide', manualPanelHandler);
+  register('action', 'referral_panel', referralPanelHandler);
+  register('action', 'view_loot_history', showLootHistoryHandler);
+  
+  bot.action('setup_referral_payout', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('SETUP_PAYOUT_ADDRESS');
+  });
+  
+  bot.action(/^open_ticket_(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('SUPPORT_WIZARD', { typeKey: ctx.match[1] });
+  });
   
   bot.action('generate_wallet', generateWalletHandler);
   bot.action('import_wallet', async (ctx) => {

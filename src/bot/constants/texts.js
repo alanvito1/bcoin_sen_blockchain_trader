@@ -1,22 +1,17 @@
 const TERMS_TEXT = 
-  `👾 <b>INSERT COIN: REGRAS DO JOGO</b> 🕹️\n\n` +
-  `Bem-vindo à Arena, Bomber Trader! Este é um motor de trading algorítmico automatizado. Antes de soltar as bombas, você precisa estar ciente dos termos:\n\n` +
-  `📜 <b>COMO JOGAR (Battle Plan):</b>\n` +
-  `- O bot utiliza estratégias de <b>Grid MA21</b> (Médias Móveis) em 30m e 4h.\n` +
-  `- As bombas explodem (trades ocorrem) aleatoriamente dentro de <b>duas janelas</b> por hora.\n` +
-  `- Você customiza o "Firepower" (montantes de compra/venda) por estratégia.\n\n` +
-  `🛡️ <b>ESCUDO DE SEGURANÇA (Wallet):</b>\n` +
-  `- Sua carteira é gerada pelo sistema. <b>Não garantimos 100% de invulnerabilidade contra ataques externos.</b>\n` +
-  `- <b>PLAYER SKILL:</b> Não mantenha todo o seu inventário no bot. Deposite apenas o que for usar para as explosões.\n\n` +
-  `⚙️ <b>ESPECIFICAÇÕES TÉCNICAS (Specs):</b>\n` +
-  `- Chaves protegidas por criptografia <b>AES-256-GCM</b>.\n` +
-  `- A "Master Key" nunca toca o banco de dados. Está em uma Dark Zone isolada.\n\n` +
-  `⚠️ <b>GAME OVER (Riscos):</b>\n` +
-  `- Nunca aposte vidas que você não possa perder. O mercado cripto é um boss difícil.\n` +
-  `- Foco: <b>Farmar moedas do jogo</b> com eficiência máxima.\n\n` +
-  `<i>Ao clicar em ✅ ACEITAR, você entra na arena sob sua conta e risco.</i>`;
+  `👾 <b>INSERT COIN: TERMOS DE GUERRA & COMPLIANCE</b> 🕹️\n\n` +
+  `Para acessar a Arena, você deve aceitar as cláusulas de ferro abaixo. O descumprimento de qualquer uma delas é sob sua total conta e risco:\n\n` +
+  `⚠️ <b>ALERTA DE SEGURANÇA (Burner Wallets):</b>\n` +
+  `- <b>É OBRIGATÓRIO</b> o uso exclusivo de carteiras descartáveis (Burner Wallets).\n` +
+  `- <b>NUNCA</b> importe sua chave privada principal. Use um cofre com apenas o saldo e o gás necessários para a rodada atual.\n\n` +
+  `⚖️ <b>ISENÇÃO ABSOLUTA DE RESPONSABILIDADE:</b>\n` +
+  `- Este software é fornecido <b>"NO ESTADO EM QUE SE ENCONTRA"</b>.\n` +
+  `- Interações com Smart Contracts, falhas de RPC, slippage de mercado ou exploits on-chain estão fora do nosso controle.\n` +
+  `- O criador e os desenvolvedores estão <b>100% isentos</b> de qualquer responsabilidade por perda financeira, bugs ou hacks.\n\n` +
+  `📉 <b>CONSCIÊNCIA DE RISCO:</b>\n` +
+  `- O mercado de criptoativos possui altíssimo risco de <b>perda total do capital</b>.\n\n` +
+  `<i>Ao clicar em ✅ Eu Aceito os Riscos, você confirma que leu, entendeu e aceita estes termos de batalha de forma irrevogável.</i>`;
 
 module.exports = {
   TERMS_TEXT
 };
-
