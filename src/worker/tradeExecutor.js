@@ -254,36 +254,10 @@ async function processTradeJob(job) {
 
     logger.info(`[TradeExecutor] Trade ${isDryRun ? 'Simulation' : 'Realized'} for ${userId}. Hash: ${txHash}`);
 
-    } catch (err) {
-      const errorMsg = err.message || 'Unknown Error';
-      logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${errorMsg}`);
-      
-      // Save FAILED trade to history for auditing
-      if (!isDryRun && userId) {
-        try {
-          await prisma.tradeHistory.create({
-            data: {
-              userId,
-              txHash: 'FAILED',
-              type: result?.signal || 'UNKNOWN',
-              status: 'FAILED',
-              amount: executionAmount || 0,
-              price: result?.price || 0,
-              errorMessage: errorMsg.slice(0, 255)
-            }
-          });
-          await sendUserNotification(user.telegramId, `❌ <b>Falha no Trade</b>\nPar: ${config.tokenPair}\nErro: <code>${errorMsg}</code>`, 'error');
-        } catch (dbErr) {
-          logger.error(`[TradeExecutor] Could not log failure: ${dbErr.message}`);
-        }
-      }
-      
-      throw err; // Re-throw for BullMQ retries/monitoring
-    }
-
     // 8. Asset Management (Transfer surplus to TARGET_ADDRESS for SEN token)
     if (config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
       const { ethers: ethersObj } = require('ethers');
+      const networkBase = globalConfig.networks[netKey];
       const SEN_ADDRESS = networkBase.tokens.find(t => t.symbol === 'SEN')?.address;
       if (SEN_ADDRESS) {
         const senContract = new ethersObj.Contract(SEN_ADDRESS, [
@@ -312,33 +286,50 @@ async function processTradeJob(job) {
       }
     }
 
-  } catch (error) {
-    logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}:`, error);
+    return { 
+      success: true, 
+      txHash, 
+      isDryRun, 
+      amount: executionAmount, 
+      token: tokenSymbol 
+    };
 
-    // Record failure in history
-    await prisma.tradeHistory.create({
-      data: {
-        userId,
-        type: 'UNKNOWN',
-        status: 'FAILED',
-        amount: 0,
-        price: 0,
-        feeUsed: 0,
-        errorMessage: error.message
+  } catch (err) {
+    const errorMsg = err.message || 'Unknown Error';
+    logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${errorMsg}`);
+    
+    // Save FAILED trade to history for auditing
+    if (userId) {
+      try {
+        await prisma.tradeHistory.create({
+          data: {
+            userId,
+            txHash: 'FAILED',
+            type: result?.signal || 'UNKNOWN',
+            status: 'FAILED',
+            amount: executionAmount || 0,
+            price: result?.price || 0,
+            errorMessage: errorMsg.slice(0, 255)
+          }
+        });
+        
+        if (user?.telegramId) {
+          await sendUserNotification(user.telegramId, `❌ <b>Falha no Trade</b>\nPar: ${config?.tokenPair || 'N/A'}\nErro: <code>${errorMsg}</code>`, 'error');
+        }
+      } catch (dbErr) {
+        logger.error(`[TradeExecutor] Could not log failure: ${dbErr.message}`);
       }
-    }).catch(e => logger.error('[TradeExecutor] DB recording error:', e));
+    }
 
-    // Pause on specific errors like balance (Original logic)
-    if (error.message.includes('gas') || error.message.includes('insufficient')) {
+    // Pause on specific errors like balance
+    if (errorMsg.includes('gas') || errorMsg.includes('insufficient')) {
       await prisma.tradeConfig.update({
         where: { id: tradeConfigId },
         data: { isOperating: false }
       }).catch(() => {});
     }
 
-    // Proactively throw the error so BullMQ can handle retries
-    throw error;
-
+    throw err; // Re-throw for BullMQ retries/monitoring
   } finally {
     wallet = null;
   }
