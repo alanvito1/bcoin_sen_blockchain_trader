@@ -208,7 +208,8 @@ try {
     })
     .catch((err) => {
       console.error('❌ CRITICAL: Launch Failure:', err);
-      process.exit(1);
+      console.error('⚠️ [System] Continuing anyway to allow Workers to run...');
+      // process.exit(1); 
     });
 
 } catch (initErr) {
