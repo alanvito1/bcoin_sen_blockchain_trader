@@ -70,6 +70,8 @@ async function processTradeJob(job) {
   try {
     // 1. Fetch data from Prisma
     let user, config, walletData;
+    let result = null;
+    let executionAmount = 0;
 
     if (walletId) {
       [user, config, walletData] = await Promise.all([
@@ -98,7 +100,6 @@ async function processTradeJob(job) {
     }
     
     // Inject override check from job data
-    let result;
     if (job.data.forceSignal) {
         logger.info(`[TradeExecutor] ⚡ FORCE SIGNAL DETECTED: ${job.data.forceSignal}`);
         result = { 
@@ -133,7 +134,6 @@ async function processTradeJob(job) {
 
     // 3. Execution Parameters
     const globalConfig = require('../config');
-    let executionAmount;
     if (result.strategyUsed === 'A') {
       executionAmount = result.signal === 'BUY' ? config.buyAmountA : config.sellAmountA;
     } else if (result.strategyUsed === 'B') {
