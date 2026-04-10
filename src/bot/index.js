@@ -83,10 +83,15 @@ try {
   const { statusHandler, historyHandler } = require('./features/status');
 
   const { 
+    adminHandler, 
+    broadcastHandler, 
+    adminToolsHandler, 
+    clearStuckHandler, 
     adminStatusHandler,
     dbHealthHandler,
     rotateTransitWalletHandler,
-    revealTransitWalletHandler
+    revealTransitWalletHandler,
+    showTransitWalletHandler
   } = require('./commands/admin');
 
   const { supportPanelHandler, supportWizard } = require('./features/support');
@@ -146,6 +151,7 @@ try {
   register('command', 'ajuda', supportPanelHandler);
   register('command', 'rotate_wallet', rotateTransitWalletHandler);
   register('command', 'reveal_transit', revealTransitWalletHandler);
+  register('command', 'show_transit', showTransitWalletHandler);
   register('command', 'cancel', async (ctx) => {
     await ctx.scene.leave();
     return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');
@@ -203,6 +209,16 @@ try {
   });
   
   bot.action('admin_panel', adminHandler);
+  bot.action('admin_tools', adminToolsHandler);
+  bot.action('admin_status', adminStatusHandler);
+  bot.action('admin_clear_stuck_polygon', (ctx) => clearStuckHandler(ctx, 'POLYGON'));
+  bot.action('admin_clear_stuck_bsc', (ctx) => clearStuckHandler(ctx, 'BSC'));
+  bot.action('admin_db_health', dbHealthHandler);
+  bot.action('broadcast_prompt', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.reply('📢 Envie a mensagem de broadcast abaixo usando o comando:\n/broadcast SUA MENSAGEM');
+  });
+
   bot.action(/^buy_package_(.+)$/, (ctx) => selectNetworkHandler(ctx, ctx.match[1]));
 
   // Global Error Catch

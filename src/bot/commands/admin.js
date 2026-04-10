@@ -98,6 +98,33 @@ async function revealTransitWalletHandler(ctx) {
   }
 }
 
+async function showTransitWalletHandler(ctx) {
+  if (ctx.from.id.toString() !== ADMIN_ID?.toString()) return;
+
+  try {
+    const { address } = await getOrCreateTransitWallet();
+    const { formatEther } = require('ethers');
+    const { providers } = require('../../services/blockchain');
+
+    const [balBnb, balPol] = await Promise.all([
+      providers.bsc.getBalance(address).catch(() => 0n),
+      providers.polygon.getBalance(address).catch(() => 0n)
+    ]);
+
+    const text = 
+      `🔍 <b>CONSULTA - TRANSIT WALLET (COFRE)</b>\n\n` +
+      `Endereço Público: <code>${address}</code>\n\n` +
+      `⛽ <b>Saldos para Gás:</b>\n` +
+      `│ 🟡 BSC: <code>${parseFloat(formatEther(balBnb)).toFixed(4)} BNB</code>\n` +
+      `│ 🟣 Polygon: <code>${parseFloat(formatEther(balPol)).toFixed(4)} POL</code>\n\n` +
+      `💡 <i>Envie gás para este endereço para habilitar as divisões automáticas de afiliados.</i>`;
+
+    return ctx.replyWithHTML(text);
+  } catch (error) {
+    return ctx.reply(`❌ Erro ao consultar: ${error.message}`);
+  }
+}
+
 async function broadcastHandler(ctx) {
   if (ctx.from.id.toString() !== ADMIN_ID?.toString()) return;
 
@@ -188,5 +215,6 @@ module.exports = {
   adminStatusHandler,
   dbHealthHandler,
   rotateTransitWalletHandler,
-  revealTransitWalletHandler
+  revealTransitWalletHandler,
+  showTransitWalletHandler
 };
