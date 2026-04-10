@@ -111,6 +111,18 @@ async function processTradeJob(job) {
         result = await strategy.getSignal(config.tokenPair, config);
     }
 
+    // Hotfix: Ensure price is not 0 for notifications (for forced signals or missing ticker)
+    if (!result.price || result.price === 0) {
+      try {
+        const [network, symbol] = config.tokenPair.split('/').reverse();
+        const priceService = require('../services/priceService');
+        result.price = await priceService.getTokenPrice(config.network, config.tokenPair.split('/')[0]);
+        logger.info(`[TradeExecutor] 🏷️ Price Hotfix: Using current market price ($${result.price})`);
+      } catch (pErr) {
+        logger.warn(`[TradeExecutor] Could not fetch recovery price: ${pErr.message}`);
+      }
+    }
+
     if (result.signal === 'HOLD') {
       if (verbose) {
         await sendUserNotification(user.telegramId, `📊 <b>Status:</b> Ciclo concluído. Recomendação: <b>HOLD</b> (Aguardar).\n<i>Motivo: ${result.reason}</i>`, 'info', 'STEP');
@@ -231,8 +243,8 @@ async function processTradeJob(job) {
     const explorerUrl = `${networkBase.explorerUrl}/tx/${txHash}`;
     
     const notificationText = isDryRun
-      ? `💥 <b>[DRY RUN] Detonação Simulada:</b> ${result.signal === 'BUY' ? 'Compra' : 'Venda'} de <b>${executionAmount} ${tokenSymbol}</b> executada virtualmente!\n<i>Par: ${config.tokenPair} | Preço: ${result.price}</i>`
-      : `✅ <b>Trade Executado!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount}\nTx: <a href="${explorerUrl}">Explorer</a>`;
+      ? `💥 <b>[DRY RUN] Detonação Simulada:</b> ${result.signal === 'BUY' ? 'Compra' : 'Venda'} de <b>${executionAmount} ${tokenSymbol}</b> executada virtualmente!\n<i>Par: ${config.tokenPair} | Preço: ${result.price.toFixed(6)}</i>`
+      : `✅ <b>Trade Executado!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount} ${tokenSymbol}\nPreço: ${result.price.toFixed(6)}\nTx: <a href="${explorerUrl}">Explorer</a>`;
 
     await sendUserNotification(user.telegramId, notificationText, 'success');
 

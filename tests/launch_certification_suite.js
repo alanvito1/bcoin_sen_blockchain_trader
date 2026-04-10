@@ -23,6 +23,7 @@ const apiId = parseInt(process.env.API_ID);
 const apiHash = (process.env.API_HASH || '').replace(/['"]/g, '');
 const sessionString = (process.env.QA_SESSION_STRING || '').replace(/['"]/g, '');
 const botUsername = (process.env.TELEGRAM_BOT_USERNAME || '@BCOIN_n_SEN_bot').replace(/['"]/g, '');
+const STRICT_PROD = process.env.STRICT_PROD === 'true';
 
 const CERT_REPORT = {
     periphery: false,
@@ -37,7 +38,9 @@ async function sleep(ms) {
 }
 
 async function runCertificationSuite() {
-    console.log('\n🛡️  [CERTIFICAÇÃO] Iniciando Master Suite E2E (Release Candidate)...');
+    const modeStr = STRICT_PROD ? '🟠 [MODO PRODUÇÃO - FOGO REAL]' : '🧪 [MODO SIMULADO - DRY RUN]';
+    console.log(`\n🛡️  [CERTIFICAÇÃO] Iniciando Master Suite E2E (Release Candidate)...`);
+    console.log(`${modeStr}`);
     console.log('------------------------------------------------------------------');
 
     if (!sessionString) {
@@ -99,10 +102,17 @@ async function runCertificationSuite() {
         };
 
         // --- PHASE 0: STATE CLEANUP (SETUP) ---
-        console.log('🧹 [PHASE 0] State Cleanup: Garantindo motores OFF...');
+        console.log(`🧹 [PHASE 0] State Cleanup: Garantindo motores OFF e Modo ${STRICT_PROD ? 'REAL' : 'DRY'}...`);
         await prisma.tradeConfig.updateMany({
             where: { user: { telegramId: BigInt(me.id) } },
-            data: { isOperating: false, dryRun: true }
+            data: { 
+                isOperating: false, 
+                dryRun: !STRICT_PROD,
+                buyAmountA: 1.0,
+                sellAmountA: 1.0,
+                buyAmountB: 1.0,
+                sellAmountB: 1.0
+            }
         });
         let currentMsg = await resetToLobby();
         console.log('✅ Ambiente inicializado e limpo.');
