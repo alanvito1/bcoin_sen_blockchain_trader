@@ -104,6 +104,7 @@ try {
   console.log('[INIT] Telegraf instantiated successfully.');
 
   // 5. Scenes Stage setup
+  const stage = new Scenes.Stage([
     importWalletScene,
     disconnectWalletScene,
     updateConfigScene,
