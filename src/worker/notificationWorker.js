@@ -17,7 +17,8 @@ const notificationWorker = new Worker('notificationQueue', async (job) => {
 
   if (type === 'CRITICAL_ALERT') {
     if (!ADMIN_ID) {
-      return logger.warn('[NotificationWorker] No ADMIN_TELEGRAM_ID configured for critical alert.');
+      logger.warn('[NotificationWorker] No ADMIN_TELEGRAM_ID configured for critical alert.');
+      return;
     }
     const alertMsg = `<b>🚨 ALERTA CRÍTICO: FALHA PERSISTENTE</b>\n\n` +
                      `<b>Job:</b> ${payload.jobName}\n` +
