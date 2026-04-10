@@ -176,16 +176,16 @@ async function getSignal(tokenPair, tradeConfig) {
     let reason = 'Análise técnica concluída: Sem sinal claro de compra/venda.';
     let strategyUsed = null;
 
-    const trendUp = lastPrice > maB;
+    const trendUp = (maB !== null) ? (lastPrice > maB) : true;
 
-    if (prevPrice >= maA && lastPrice < maA) {
+    if (maA !== null && prevPrice >= maA && lastPrice < maA) {
       const rsiConfirm = !tradeConfig?.rsiEnabled || rsiValue < 30;
       if (tradeConfig?.strategy30m && (!tradeConfig?.strategy4h || trendUp) && rsiConfirm) {
         signal = 'BUY';
         reason = `Cruzou ABAIXO da MA${maPeriodA} (Fundo). Tendência de Alta em ${tfB} Confirmada.`;
         strategyUsed = 'A';
       }
-    } else if (prevPrice <= maA && lastPrice > maA) {
+    } else if (maA !== null && prevPrice <= maA && lastPrice > maA) {
       const rsiConfirm = !tradeConfig?.rsiEnabled || rsiValue > 70;
       if (tradeConfig?.strategy30m && rsiConfirm) {
         signal = 'SELL';
