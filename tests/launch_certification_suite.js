@@ -165,9 +165,9 @@ async function runCertificationSuite() {
             let arenaMsg = await clickAndVerify(currentMsg, { data: 'trade_panel' });
             let engineMsg = await clickAndVerify(arenaMsg, { data: route.id });
 
-            // Set Slippage
+            // Set Slippage (10% for Production Certification to avoid reverts)
             let slippageMsg = await clickAndVerify(engineMsg, { data: 'edit_slippage' });
-            await client.sendMessage(botUsername, { message: '1.5' });
+            await client.sendMessage(botUsername, { message: STRICT_PROD ? '10.0' : '1.5' });
             await sleep(4000);
             
             // Reload and Start
@@ -177,7 +177,7 @@ async function runCertificationSuite() {
             
             if (engineMsg.message.includes('PAUSADO')) {
                 await clickAndVerify(engineMsg, { data: 'start_bot' });
-                console.log(`│ ✅ ${route.network} - ${route.token} Ligado (Slippage: 1.5%)`);
+                console.log(`│ ✅ ${route.network} - ${route.token} Ligado (Slippage: ${STRICT_PROD ? '10.0' : '1.5'}%)`);
             } else {
                 console.log(`│ ⏺️  ${route.network} - ${route.token} já estava ligado.`);
             }
@@ -208,13 +208,15 @@ async function runCertificationSuite() {
                 forceSignal: inj.signal
             });
             console.log(`│ ⚡ Injecão: ${inj.network} ${inj.pair} [${inj.signal.toUpperCase()}] enviada.`);
+            if (STRICT_PROD) await sleep(8000); // 8s interval between real trades to avoid RPC/gecko limits
         }
 
-        console.log(`⏳ Aguardando 4 notificações [DRY RUN] (Timeout: 120s)...`);
+        const modeLabel = STRICT_PROD ? 'REAL' : 'DRY RUN';
+        console.log(`⏳ Aguardando 4 notificações [${modeLabel}] (Timeout: 180s)...`);
         
         let foundNotifications = 0;
         const seenMsgIds = new Set();
-        const timeoutAt = Date.now() + 120000;
+        const timeoutAt = Date.now() + 180000;
 
         while (Date.now() < timeoutAt && foundNotifications < 4) {
             const msgs = await client.getMessages(botUsername, { limit: 10 });

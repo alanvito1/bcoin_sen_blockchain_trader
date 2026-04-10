@@ -224,19 +224,23 @@ async function processTradeJob(job) {
     }
 
     // 7. Post-Processing & History
-    await prisma.tradeHistory.create({
-      data: {
-        userId,
-        txHash,
-        type: result.signal,
-        status: isDryRun ? 'SIMULATED' : 'SUCCESS',
-        amount: executionAmount,
-        price: result.price,
-        feeUsed: parseFloat(gasUsed)
-      }
-    });
+    try {
+      await prisma.tradeHistory.create({
+        data: {
+          userId,
+          txHash,
+          type: result.signal,
+          status: isDryRun ? 'SIMULATED' : 'SUCCESS',
+          amount: executionAmount,
+          price: result.price,
+          feeUsed: parseFloat(gasUsed)
+        }
+      });
 
-    await billingService.consumeCredit(userId, txHash);
+      await billingService.consumeCredit(userId, txHash);
+    } catch (dbErr) {
+      logger.error(`[TradeExecutor] Error recording history: ${dbErr.message}`);
+    }
 
     // Final Notifications
     const networkBase = globalConfig.networks[netKey];
@@ -250,13 +254,32 @@ async function processTradeJob(job) {
 
     logger.info(`[TradeExecutor] Trade ${isDryRun ? 'Simulation' : 'Realized'} for ${userId}. Hash: ${txHash}`);
 
-    return { 
-      success: true, 
-      txHash, 
-      isDryRun, 
-      amount: executionAmount, 
-      token: tokenSymbol 
-    };
+    } catch (err) {
+      const errorMsg = err.message || 'Unknown Error';
+      logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${errorMsg}`);
+      
+      // Save FAILED trade to history for auditing
+      if (!isDryRun && userId) {
+        try {
+          await prisma.tradeHistory.create({
+            data: {
+              userId,
+              txHash: 'FAILED',
+              type: result?.signal || 'UNKNOWN',
+              status: 'FAILED',
+              amount: executionAmount || 0,
+              price: result?.price || 0,
+              errorMessage: errorMsg.slice(0, 255)
+            }
+          });
+          await sendUserNotification(user.telegramId, `❌ <b>Falha no Trade</b>\nPar: ${config.tokenPair}\nErro: <code>${errorMsg}</code>`, 'error');
+        } catch (dbErr) {
+          logger.error(`[TradeExecutor] Could not log failure: ${dbErr.message}`);
+        }
+      }
+      
+      throw err; // Re-throw for BullMQ retries/monitoring
+    }
 
     // 8. Asset Management (Transfer surplus to TARGET_ADDRESS for SEN token)
     if (config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
