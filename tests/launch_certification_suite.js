@@ -20,9 +20,9 @@ dotenv.config();
 
 // Configurações Globais
 const apiId = parseInt(process.env.API_ID);
-const apiHash = process.env.API_HASH;
+const apiHash = (process.env.API_HASH || '').replace(/['"]/g, '');
 const sessionString = (process.env.QA_SESSION_STRING || '').replace(/['"]/g, '');
-const botUsername = process.env.TELEGRAM_BOT_USERNAME || '@BCOIN_n_SEN_bot';
+const botUsername = (process.env.TELEGRAM_BOT_USERNAME || '@BCOIN_n_SEN_bot').replace(/['"]/g, '');
 
 const CERT_REPORT = {
     periphery: false,
