@@ -21,6 +21,13 @@ dotenv.config();
 // Configurações Globais
 const apiId = parseInt(process.env.API_ID);
 const apiHash = (process.env.API_HASH || '').replace(/['"]/g, '');
+
+if (!apiId || !apiHash) {
+    console.error('❌ ERRO: API_ID ou API_HASH não encontrados no ambiente!');
+    console.log('Verifique o arquivo .env ou a injeção do Docker.');
+    process.exit(1);
+}
+
 const sessionString = (process.env.QA_SESSION_STRING || '').replace(/['"]/g, '');
 const botUsername = (process.env.TELEGRAM_BOT_USERNAME || '@BCOIN_n_SEN_bot').replace(/['"]/g, '');
 const STRICT_PROD = process.env.STRICT_PROD === 'true';
