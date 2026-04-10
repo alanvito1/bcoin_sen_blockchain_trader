@@ -214,11 +214,6 @@ async function processTradeJob(job) {
       }
     });
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { credits: { decrement: 1 } }
-    });
-
     await billingService.consumeCredit(userId, txHash);
 
     // Final Notifications

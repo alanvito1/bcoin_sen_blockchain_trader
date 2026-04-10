@@ -10,7 +10,7 @@ const logger = require('../utils/logger');
 async function consumeCredit(userId, txHash) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { tradeConfig: true }
+    include: { tradeConfigs: true }
   });
 
   if (!user) return;
@@ -31,7 +31,7 @@ async function consumeCredit(userId, txHash) {
 
   // Kill Switch: Pause if no credits left
   if (updatedUser.credits <= 0) {
-    await prisma.tradeConfig.update({
+    await prisma.tradeConfig.updateMany({
       where: { userId },
       data: { isOperating: false }
     });
