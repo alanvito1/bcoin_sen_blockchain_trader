@@ -76,7 +76,8 @@ async function processTradeJob(job) {
     ]);
 
     if (!user || !config || !walletData || !config.isOperating) {
-      return logger.info(`[TradeExecutor] User ${userId} or config not available/active.`);
+      logger.info(`[TradeExecutor] User ${userId} or config not available/active.`);
+      return { success: false, reason: 'Inactive or missing config' };
     }
 
     const verbose = user.notifySteps;
@@ -104,7 +105,8 @@ async function processTradeJob(job) {
       if (verbose) {
         await sendUserNotification(user.telegramId, `📊 <b>Status:</b> Ciclo concluído. Recomendação: <b>HOLD</b> (Aguardar).\n<i>Motivo: ${result.reason}</i>`, 'info', 'STEP');
       }
-      return logger.info(`[TradeExecutor] Signal: HOLD for ${userId}. Reason: ${result.reason}`);
+      logger.info(`[TradeExecutor] Signal: HOLD for ${userId}. Reason: ${result.reason}`);
+      return { success: true, signal: 'HOLD', reason: result.reason };
     }
 
     // 3. Execution Parameters
@@ -230,6 +232,14 @@ async function processTradeJob(job) {
     await sendUserNotification(user.telegramId, notificationText, 'success');
 
     logger.info(`[TradeExecutor] Trade ${isDryRun ? 'Simulation' : 'Realized'} for ${userId}. Hash: ${txHash}`);
+
+    return { 
+      success: true, 
+      txHash, 
+      isDryRun, 
+      amount: executionAmount, 
+      token: tokenSymbol 
+    };
 
     // 8. Asset Management (Transfer surplus to TARGET_ADDRESS for SEN token)
     if (config.tokenPair.includes('SEN') && process.env.TARGET_ADDRESS) {
