@@ -19,7 +19,7 @@ model User {
   updatedAt             DateTime       @updatedAt
   hasAcceptedTerms      Boolean        @default(false)
   notifyBalances        Boolean        @default(true)
-  notifySteps           Boolean        @default(false)
+  notifySteps           Boolean        @default(true)
   notifyTrades          Boolean        @default(true)
   referralCode          String?        @unique
   referralPayoutAddress String?

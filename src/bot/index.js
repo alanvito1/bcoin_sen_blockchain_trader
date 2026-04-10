@@ -99,13 +99,8 @@ try {
   const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
 
   // 4. Initialization Logic
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) {
-    throw new Error('CRITICAL: TELEGRAM_BOT_TOKEN is missing from environment!');
-  }
-
-  bot = new Telegraf(token);
-  console.log('[INIT] Telegraf instantiated successfully.');
+  bot = require('../config/bot');
+  console.log('[INIT] Bot singleton loaded successfully.');
 
   // 5. Scenes Stage setup
   const stage = new Scenes.Stage([
@@ -171,6 +166,12 @@ try {
   register('action', 'quick_guide', manualPanelHandler);
   register('action', 'referral_panel', referralPanelHandler);
   register('action', 'view_loot_history', showLootHistoryHandler);
+  register('action', 'log_settings', logSettingsHandler);
+  
+  // Log Preference Toggles
+  bot.action('toggle_notifyTrades', (ctx) => toggleLogPreference(ctx, 'notifyTrades'));
+  bot.action('toggle_notifyBalances', (ctx) => toggleLogPreference(ctx, 'notifyBalances'));
+  bot.action('toggle_notifySteps', (ctx) => toggleLogPreference(ctx, 'notifySteps'));
   
   bot.action('setup_referral_payout', async (ctx) => {
     await ctx.answerCbQuery();

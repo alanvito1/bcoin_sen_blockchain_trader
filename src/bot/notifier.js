@@ -1,9 +1,6 @@
-const { Telegraf } = require('telegraf');
+const bot = require('../config/bot');
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
-require('dotenv').config();
-
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 /**
  * Sends an asynchronous notification to a Telegram user.
