@@ -38,7 +38,11 @@ async function main() {
   // 1. Decrypt Wallet
   const rpcUrl = config.networks.bsc.rpc.split(',')[0].trim();
   const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const decryptedKey = encryption.decrypt(user.wallet.privateKey, user.wallet.iv);
+  const decryptedKey = encryption.decrypt({
+    encryptedData: user.wallet.encryptedPrivateKey,
+    iv: user.wallet.iv,
+    authTag: user.wallet.authTag
+  });
   const signer = new ethers.Wallet(decryptedKey, provider);
 
   console.log(`📡 Operando com: ${signer.address}`);

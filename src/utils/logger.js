@@ -56,11 +56,10 @@ const redact = format((info) => {
 });
 
 const logger = createLogger({
-  level: 'info',
   format: combine(
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     errors({ stack: true }),
-    redact(), // Apply redaction before JSON
+    redact(),
     splat(),
     json()
   ),
@@ -70,6 +69,22 @@ const logger = createLogger({
     new transports.File({ filename: 'logs/combined.log' }),
   ],
 });
+
+// Add custom levels/helpers to the logger instance
+logger.colors = {
+  reset: "\x1b[0m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  gray: "\x1b[90m"
+};
+
+logger.step = (msg, meta = {}) => logger.info(`${logger.colors.cyan}>> ${msg}${logger.colors.reset}`, meta);
+logger.success = (msg, meta = {}) => logger.info(`${logger.colors.green}✔ ${msg}${logger.colors.reset}`, meta);
 
 // If not in production, log to console with a simpler format
 if (process.env.NODE_ENV !== 'production') {
