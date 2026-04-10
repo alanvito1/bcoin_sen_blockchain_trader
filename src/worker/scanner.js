@@ -51,20 +51,54 @@ const scannerTask = cron.schedule('* * * * *', async () => {
         return false;
       }
  
-      // Gate B: Schedule
+      // Gate B: Schedule & Cooldown
       let isScheduled = false;
+      const lastOp = config.lastOperationAt ? new Date(config.lastOperationAt) : null;
+      const hoursSinceLast = lastOp ? (now - lastOp) / (1000 * 60 * 60) : 999;
+      
       if (config.scheduleMode === 'interval') {
-        isScheduled = currentMinute % (config.intervalMinutes || 60) === 0;
+        const interval = config.intervalMinutes || 60;
+        isScheduled = currentMinute % interval === 0;
+        
+        // Cooldown for interval: ensure at least 80% of interval has passed to avoid double-fire on minute clock jitter
+        if (isScheduled && lastOp && (now - lastOp) < (interval * 0.8 * 60 * 1000)) {
+          logger.debug(`[Scanner] ${user.telegramId} [${config.network}] interval cooldown active.`);
+          return false;
+        }
+
         if (!isScheduled) {
-          logger.debug(`[Scanner] User ${user.telegramId} [${config.network}] skipped: Next interval at ${Math.ceil(currentMinute / config.intervalMinutes) * config.intervalMinutes}m (Current: ${currentMinute}m)`);
+          logger.debug(`[Scanner] ${user.telegramId} [${config.network}] skipped: Next interval at ${Math.ceil(currentMinute / interval) * interval}m`);
         }
       } else {
-        // Window Mode (Default: runs every minute between Min and Max)
+        // Window Mode (One-Shot per Window)
         const inWindow1 = currentMinute >= (config.window1Min || 0) && currentMinute <= (config.window1Max || 0);
         const inWindow2 = currentMinute >= (config.window2Min || 0) && currentMinute <= (config.window2Max || 0);
-        isScheduled = inWindow1 || inWindow2;
-        if (!isScheduled) {
-          logger.debug(`[Scanner] User ${user.telegramId} [${config.network}] skipped: Outside windows [${config.window1Min}-${config.window1Max}] and [${config.window2Min}-${config.window2Max}] at ${currentMinute}m`);
+        
+        const currentWindow = inWindow1 ? 1 : (inWindow2 ? 2 : null);
+
+        if (currentWindow) {
+          // Check if already operated in THIS window (today and same window index)
+          const isSameDay = lastOp && lastOp.toDateString() === now.toDateString();
+          const alreadyDone = isSameDay && config.lastOperationWindow === currentWindow;
+
+          if (alreadyDone) {
+            logger.debug(`[Scanner] ${user.telegramId} [${config.network}] Window ${currentWindow} already completed today.`);
+            return false;
+          }
+
+          // Deterministic Random Minute per bot/window to avoid pattern detection
+          // Seeded by config ID and window index
+          const seed = parseInt(config.id.replace(/-/g, '').slice(0, 8), 16) + currentWindow;
+          const windowMin = currentWindow === 1 ? config.window1Min : config.window2Min;
+          const windowMax = currentWindow === 1 ? config.window1Max : config.window2Max;
+          const windowSize = (windowMax - windowMin) + 1;
+          const targetMinute = windowMin + (seed % windowSize);
+
+          isScheduled = currentMinute === targetMinute;
+
+          if (!isScheduled) {
+            logger.debug(`[Scanner] ${user.telegramId} [${config.network}] Waiting for target minute ${targetMinute} (Current: ${currentMinute})`);
+          }
         }
       }
       return isScheduled;

@@ -173,6 +173,11 @@ async function processTradeJob(job) {
     wallet = global.walletNonceCache.get(cacheKey);
     
     // 5. Pre-trade Balance Check
+    const currentMinute = new Date().getUTCMinutes();
+    const inWindow1 = currentMinute >= (config.window1Min || 0) && currentMinute <= (config.window1Max || 0);
+    const inWindow2 = currentMinute >= (config.window2Min || 0) && currentMinute <= (config.window2Max || 0);
+    const windowIndex = inWindow1 ? 1 : (inWindow2 ? 2 : null);
+
     const isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
     if (verbose) {
       await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '💰 '}<b>Passo 2/4:</b> Verificando saldo e taxas na rede <code>${config.network}</code>...`, 'info', 'STEP');
@@ -263,10 +268,21 @@ async function processTradeJob(job) {
     const explorerUrl = `${networkBase.explorerUrl}/tx/${txHash}`;
     
     const notificationText = isDryRun
-      ? `💥 <b>[DRY RUN] Detonação Simulada:</b> ${result.signal === 'BUY' ? 'Compra' : 'Venda'} de <b>${executionAmount} ${tokenSymbol}</b> executada virtualmente!\n<i>Par: ${config.tokenPair} | Preço: ${result.price.toFixed(6)}</i>`
-      : `✅ <b>Trade Executado!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount} ${tokenSymbol}\nPreço: ${result.price.toFixed(6)}\nTx: <a href="${explorerUrl}">Explorer</a>`;
+      ? `🧪 <b>SIMULAÇÃO CONCLUÍDA</b>\nPar: ${config.tokenPair}\nBomba disparada virtualmente sem usar saldo real.\n\n<i>Efeito surpresa testado com sucesso.</i>`
+      : `✅ <b>DETONAÇÃO REALIZADA!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount} ${tokenSymbol}\nPreço: ${result.price.toFixed(6)}\n\n🔗 <a href="${explorerUrl}">Ver no Explorer</a>`;
 
-    await sendUserNotification(user.telegramId, notificationText, 'success');
+    await sendUserNotification(user.telegramId, notificationText, isDryRun ? 'info' : 'success');
+
+    // Persistence: Mark window as COMPLETED
+    if (userId) {
+      await prisma.tradeConfig.update({
+        where: { id: tradeConfigId },
+        data: {
+          lastOperationAt: new Date(),
+          lastOperationWindow: windowIndex
+        }
+      }).catch(e => logger.error(`[TradeExecutor] Failed to update persistence: ${e.message}`));
+    }
 
     logger.info(`[TradeExecutor] Trade ${isDryRun ? 'Simulation' : 'Realized'} for ${userId}. Hash: ${txHash}`);
 

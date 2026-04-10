@@ -443,10 +443,10 @@ async function setupScheduleMenu(ctx) {
 
   const text =
     `⏲️ <b>Arena &gt; ${config.network} &gt; ${token} &gt; Timer de Detonação</b>\n\n` +
-    `Modo atual: <b>${mode === 'interval' ? 'Intervalo Fixo' : 'Janelas Aleatórias'}</b>\n` +
+    `Modo atual: <b>${mode === 'interval' ? 'Intervalo Fixo ⏱️' : 'Janela Surpresa 🎲'}</b>\n` +
     `Frequência: <code>${scheduleDesc}</code>\n\n` +
-    `<b>Janelas Aleatórias:</b> Simula o drop de itens aleatórios. Mais discreto e seguro.\n\n` +
-    `<b>Intervalo Fixo:</b> Ideal para farm frenético. Explosões cronometradas.`;
+    `<b>Janela Surpresa:</b> Executa apenas 1 trade em um minuto surpresa dentro do intervalo escolhido. Ideal para evitar detecção e padrões.\n\n` +
+    `<b>Intervalo Fixo:</b> Executa trades de forma recorrente a cada X minutos. Ideal para estratégias de alto volume.`;
 
   const presetRow1 = INTERVAL_PRESETS.slice(0, 5).map(([label, mins]) => {
     const active = config.intervalMinutes === mins && mode === 'interval';

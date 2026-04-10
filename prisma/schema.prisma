@@ -96,8 +96,10 @@ model TradeConfig {
   timeframeA          String  @default("30m")
   timeframeB          String  @default("4h")
   antiSandwichEnabled Boolean @default(false)
-  dryRun              Boolean @default(false)
-  user                User    @relation(fields: [userId], references: [id])
+  dryRun              Boolean   @default(false)
+  lastOperationAt     DateTime?
+  lastOperationWindow Int?
+  user                User      @relation(fields: [userId], references: [id])
 
   @@unique([userId, network, tokenPair])
 }
