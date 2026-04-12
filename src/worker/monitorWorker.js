@@ -16,14 +16,28 @@ const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID;
 
 async function checkTransitIntegrity() {
   try {
-    const transit = await getOrCreateTransitWallet();
+    let transitAddress;
+    
+    // Priority: Environment Variable (USER provided)
+    if (process.env.TRANSIT_WALLET_ADDRESS) {
+      transitAddress = process.env.TRANSIT_WALLET_ADDRESS;
+    } else {
+      const transit = await getOrCreateTransitWallet();
+      transitAddress = transit?.address;
+    }
+
+    if (!transitAddress) {
+      logger.warn('[Monitor] No Transit Wallet address found to monitor.');
+      return;
+    }
+
     const networks = ['bsc', 'polygon'];
 
     for (const net of networks) {
       const provider = providers[net];
       if (!provider) continue;
 
-      const currentNonce = await provider.getTransactionCount(transit.address);
+      const currentNonce = await provider.getTransactionCount(transitAddress);
       const secretKey = `TRANSIT_NONCE_${net.toUpperCase()}`;
 
       const lastNonceSecret = await prisma.systemSecret.findUnique({
