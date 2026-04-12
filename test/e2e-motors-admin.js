@@ -62,7 +62,8 @@ async function validationE2E() {
         tradeConfigId: config.id,
         walletId: user.wallet.id,
         forceSignal: 'BUY',
-        forcePrice: 1.0,
+        forcePrice: 0.05,
+        forceAmount: 100.0, // 100.0 BCOIN/SEN (Approx 0.7 USDT/ 15 USDT)
         forceStrategy: 'VALIDATION_E2E',
         isFirstAttempt: true
       });

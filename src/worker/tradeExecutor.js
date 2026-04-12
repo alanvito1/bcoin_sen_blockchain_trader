@@ -160,7 +160,9 @@ ${rsiIndicator}
 
     // 3. Execution Parameters
     const globalConfig = require('../config');
-    if (result.strategyUsed === 'A') {
+    if (job.data.forceAmount) {
+      executionAmount = job.data.forceAmount;
+    } else if (result.strategyUsed === 'A') {
       executionAmount = result.signal === 'BUY' ? config.buyAmountA : config.sellAmountA;
     } else if (result.strategyUsed === 'B') {
       executionAmount = result.signal === 'BUY' ? config.buyAmountB : config.sellAmountB;

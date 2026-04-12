@@ -112,6 +112,9 @@ async function getBestPath(routerContract, amount, tokenIn, tokenOut, bridgeToke
       }
     } catch (e) {
       // Path not liquid
+      if (!e.message.includes('INSUFFICIENT_LIQUIDITY')) {
+          logger.debug(`[PathFinder] Path ${path.slice(0, 6).join('->')} rejection: ${e.message}`);
+      }
     }
   }
 
