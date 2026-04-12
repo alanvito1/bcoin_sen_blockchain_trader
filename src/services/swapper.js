@@ -2,7 +2,7 @@ const { Wallet, ethers } = require('ethers');
 const blockchain = require('./blockchain');
 const globalConfig = require('../config');
 const logger = require('../utils/logger');
-const explorer = require('./explorer');
+const explorer = require('../utils/explorer');
 const { wallets, providers: blockchainProviders } = blockchain;
 
 const ERC20_ABI = [
