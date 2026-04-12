@@ -148,7 +148,6 @@ async function savePriceToDb(network, symbol, price) {
     // Ignore duplicate key or minor DB errors
   }
 }
-}
 
 module.exports = {
   getTokenPrice
