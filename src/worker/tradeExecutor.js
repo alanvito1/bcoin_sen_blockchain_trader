@@ -396,8 +396,6 @@ ${balanceText}
     const errorMsg = err.message || 'Unknown Error';
     logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${errorMsg}`);
     
-    // Attempt recovery of user data if not already fetched
-    let targetId = userId;
     let targetTelegramId;
     try {
       const u = await prisma.user.findUnique({ where: { id: userId } });
@@ -406,7 +404,6 @@ ${balanceText}
       logger.error(`[TradeExecutor] Could not fetch telegramId for error report: ${e.message}`);
     }
 
-    // Save FAILED trade to history for auditing
     if (userId) {
       try {
         await prisma.tradeHistory.create({
@@ -443,7 +440,6 @@ ${balanceText}
       }
     }
 
-    // Pause on specific errors like balance
     const isBalanceError = errorMsg.toLowerCase().includes('insufficient funds') || errorMsg.toLowerCase().includes('gas');
     if (isBalanceError) {
       await prisma.tradeConfig.update({
