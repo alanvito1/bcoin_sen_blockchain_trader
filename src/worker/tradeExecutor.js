@@ -66,14 +66,20 @@ async function processTradeJob(job) {
   const { userId, tradeConfigId, walletId } = job.data;
   logger.info(`[TradeExecutor] Processing job for user: ${userId}`);
 
-  let wallet = null; // Defined in upper scope for secure nulling in 'finally' block
+  // --- CORE SCOPE DECLARATION (FIX: ACCESSIBLE IN CATCH BLOCK) ---
+  let user = null;
+  let config = null;
+  let walletData = null;
+  let wallet = null;
+  let result = null;
+  let executionAmount = 0;
+  let txHash = null;
+  let gasUsed = '0.001';
+  let tokenSymbol = 'N/A';
+  let isDryRun = false;
 
   try {
     // 1. Fetch data from Prisma
-    let user, config, walletData;
-    let result = null;
-    let executionAmount = 0;
-
     if (walletId) {
       [user, config, walletData] = await Promise.all([
         prisma.user.findUnique({ where: { id: userId } }),
@@ -94,15 +100,15 @@ async function processTradeJob(job) {
     }
 
     const verbose = user.notifySteps;
+    isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
 
     // --- NETWORK & NOMENCLATURE PREPARATION (UX Rules) ---
     const netKey = config.network.toLowerCase();
     const netLabel = netKey.toUpperCase();
-    let [tokenSymbol] = config.tokenPair.split('/');
+    [tokenSymbol] = config.tokenPair.split('/');
     const displaySymbol = (netKey === 'polygon' && tokenSymbol.toUpperCase() === 'BCOIN') ? 'BOMB' : tokenSymbol;
 
     // 2. Strategy Check (Quiet background analysis)
-    
     
     // Inject override check from job data
     if (job.data.forceSignal) {
