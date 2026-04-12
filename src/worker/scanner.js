@@ -43,9 +43,13 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       
       // Gate A: Credits/Subscription (Bypass for ADMIN)
       const isSubscribed = user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
+      // Gate A: Credits/Subscription (Bypass for ADMIN)
+      const isSubscribed = user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
       const possessesCredits = user.credits > 0;
       const isAdmin = adminTelegramId && user.telegramId === adminTelegramId;
       
+      logger.debug(`[Scanner] ${user.telegramId} Check: isAdmin=${!!isAdmin}, hasCredits=${possessesCredits}, isSubscribed=${!!isSubscribed}`);
+
       if (!isAdmin && !isSubscribed && !possessesCredits) {
         logger.warn(`[Scanner] User ${user.telegramId} skipped: No credits/subscription.`);
         return false;
@@ -54,15 +58,12 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       // Gate B: Schedule & Cooldown
       let isScheduled = false;
       const lastOp = config.lastOperationAt ? new Date(config.lastOperationAt) : null;
-      const hoursSinceLast = lastOp ? (now - lastOp) / (1000 * 60 * 60) : 999;
       
       if (config.scheduleMode === 'interval') {
         const interval = config.intervalMinutes || 60;
         isScheduled = currentMinute % interval === 0;
         
-        // Cooldown for interval: ensure at least 80% of interval has passed to avoid double-fire on minute clock jitter
         if (isScheduled && lastOp && (now - lastOp) < (interval * 0.8 * 60 * 1000)) {
-          logger.debug(`[Scanner] ${user.telegramId} [${config.network}] interval cooldown active.`);
           return false;
         }
 
@@ -77,7 +78,6 @@ const scannerTask = cron.schedule('* * * * *', async () => {
         const currentWindow = inWindow1 ? 1 : (inWindow2 ? 2 : null);
 
         if (currentWindow) {
-          // Check if already operated in THIS window (today and same window index)
           const isSameDay = lastOp && lastOp.toDateString() === now.toDateString();
           const alreadyDone = isSameDay && config.lastOperationWindow === currentWindow;
 
@@ -86,23 +86,23 @@ const scannerTask = cron.schedule('* * * * *', async () => {
             return false;
           }
 
-          // Deterministic Random Minute per bot/window to avoid pattern detection
-          // Seeded by config ID and window index
           const seed = parseInt(config.id.replace(/-/g, '').slice(0, 8), 16) + currentWindow;
           const windowMin = currentWindow === 1 ? config.window1Min : config.window2Min;
           const windowMax = currentWindow === 1 ? config.window1Max : config.window2Max;
           const windowSize = (windowMax - windowMin) + 1;
           const targetMinute = windowMin + (seed % windowSize);
 
-          // If strategy returns HOLD, config.lastOperationWindow will NOT be updated.
-          // This allows the scanner to retry every minute until the window closes or a trade fires.
           isScheduled = currentMinute >= targetMinute;
 
+          logger.debug(`[Scanner] ${user.telegramId} Window ${currentWindow}: target=${targetMinute}, current=${currentMinute}, isScheduled=${isScheduled}`);
+          
           if (!isScheduled) {
             logger.debug(`[Scanner] ${user.telegramId} [${config.network}] Waiting for target minute ${targetMinute} (Current: ${currentMinute})`);
           } else {
             logger.info(`[Scanner] ${user.telegramId} [${config.network}] Window ${currentWindow} active. Target ${targetMinute} reached. Attempting trade...`);
           }
+        } else {
+          logger.debug(`[Scanner] ${user.telegramId} not in any window (Minute: ${currentMinute})`);
         }
       }
       return isScheduled;
