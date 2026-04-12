@@ -425,12 +425,18 @@ ${balanceText}
         if (targetTelegramId) {
           const netLabel = config?.network?.toUpperCase() || 'BATTLESYSTEM';
           const isRpcError = errorMsg.includes('OPERAÇÃO CANCELADA') || errorMsg.includes('ENOTFOUND') || errorMsg.includes('Unauthorized');
+          const isLiquidityError = errorMsg.toLowerCase().includes('reverted') || errorMsg.toLowerCase().includes('insufficient liquidity') || errorMsg.toLowerCase().includes('path');
           
-          const displayError = isRpcError 
-            ? `🔴 <b>OPERAÇÃO CANCELADA</b>\nFalha massiva de comunicação com a Blockchain (RPC Down).`
-            : `🚨 <b>FALHA NO MOTOR [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>`;
+          let displayError;
+          if (isRpcError) {
+            displayError = `🔴 <b>OPERAÇÃO CANCELADA</b>\nFalha massiva de comunicação com a Blockchain (RPC Down).`;
+          } else if (isLiquidityError) {
+            displayError = `⏳ <b>AGUARDANDO LIQUIDEZ [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO mercado ainda não possui profundidade para este trade ou o slippage foi atingido. O motor continuará monitorando em silêncio.`;
+          } else {
+            displayError = `🚨 <b>FALHA NO MOTOR [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>`;
+          }
 
-          await sendUserNotification(targetTelegramId, `${displayError}\n\n<i>Auditando logs para auto-recuperação...</i>`, 'error', 'INFO');
+          await sendUserNotification(targetTelegramId, `${displayError}\n\n<i>Auditando logs para auto-recuperação...</i>`, isLiquidityError ? 'info' : 'error', 'INFO');
         }
       } catch (dbErr) {
         logger.error(`[TradeExecutor] Could not log failure: ${dbErr.message}`);

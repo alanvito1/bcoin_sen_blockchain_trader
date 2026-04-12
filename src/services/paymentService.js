@@ -73,7 +73,7 @@ async function processCheckout(userId, type, amount, tokenAddress = null, networ
       tx = await tokenContract.transfer(transit.address, amountWei);
     }
 
-    const receipt = await tx.wait(1);
+    const receipt = await tx.wait(3);
     
     // 4. Create Payout Log (Audit)
     const payoutLog = await prisma.payoutLog.create({

@@ -7,14 +7,14 @@ const balanceService = require('../../services/balanceService');
 const levelingService = require('../../services/levelingService');
 
 const PACKAGES = [
-  { id: 'p1', name: '🔋 1.000 Fire-Charges', price: 10, credits: 1000 },
-  { id: 'p2', name: '🔋 5.000 Fire-Charges', price: 40, credits: 5000 },
-  { id: 'mrr', name: '💎 BOMB-PASS VIP (30 Dias)', price: 29, credits: 0, isSubscription: true }
+  { id: 'p1', name: '🔋 300 Fire-Charges', price: 10, credits: 300 },
+  { id: 'p2', name: '🔋 1.200 Fire-Charges', price: 40, credits: 1200 },
+  { id: 'mrr', name: '💎 BOMB-PASS VIP (14 Dias)', price: 29.90, credits: 0, isSubscription: true }
 ];
 
 async function storePanelHandler(ctx) {
   const text = '🏪 <b>Item Shop: Batalha & Survival</b>\nAbasteça seu estoque de Fire-Charges para continuar detonando na arena.\n\n' +
-    '⚠️ <b>NOTA:</b> O Bomb-Pass VIP tem validade de <b>30 dias corridos</b>. Após este período, é necessária a renovação para manter os benefícios ilimitados.\n\nEscolha um power-up:';
+    '⚠️ <b>NOTA:</b> O Bomb-Pass VIP tem validade de <b>14 dias corridos</b>. Após este período, é necessária a renovação para manter os benefícios ilimitados.\n\nEscolha um power-up:';
   
   const buttons = PACKAGES.map(p => ([
     Markup.button.callback(`${p.name} - $${p.price}`, `buy_package_${p.id}`)
@@ -176,7 +176,7 @@ async function executePaymentHandler(ctx, packageId, network, assetName, amountT
 
     if (pkg.isSubscription) {
       const expiry = new Date();
-      expiry.setDate(expiry.getDate() + 30);
+      expiry.setDate(expiry.getDate() + 14);
       await prisma.user.update({ where: { id: user.id }, data: { subscriptionExpiresAt: expiry } });
     } else {
       await prisma.user.update({ where: { id: user.id }, data: { credits: { increment: pkg.credits } } });

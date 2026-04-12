@@ -260,9 +260,10 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
                 const altEstimated = await withRPCRetry(() => estimate(altPath), networkName);
                 gasLimit = (altEstimated * 120n) / 100n;
                 path.splice(0, path.length, ...altPath); // Update path in-place
-                logger.info(`[${networkName}] ✅ Simulação Sucesso (Rota Triangular). Gás Estimado: ${gasLimit.toString()}`);
+                logger.info(`[${networkName}] ✅ Simulação Sucesso (ROTA TRIANGULAR). Gás Estimado (+20%): ${gasLimit.toString()}`);
             } else {
-                throw simError;
+                throw new Error(`Ambas as rotas falharam na simulação (Liquidez/Price Impact). Original error: ${simError.message}`);
+            }
             }
         } else {
             throw simError;
