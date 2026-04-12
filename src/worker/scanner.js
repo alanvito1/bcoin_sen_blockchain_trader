@@ -79,10 +79,7 @@ const scannerTask = cron.schedule('* * * * *', async () => {
           const isSameDay = lastOp && lastOp.toDateString() === now.toDateString();
           const alreadyDone = isSameDay && config.lastOperationWindow === currentWindow;
 
-          if (alreadyDone) {
-            logger.debug(`[Scanner] ${user.telegramId} [${config.network}] Window ${currentWindow} already completed today.`);
-            return false;
-          }
+          if (alreadyDone) return false;
 
           const seed = parseInt(config.id.replace(/-/g, '').slice(0, 8), 16) + currentWindow;
           const windowMin = currentWindow === 1 ? config.window1Min : config.window2Min;
@@ -90,37 +87,46 @@ const scannerTask = cron.schedule('* * * * *', async () => {
           const windowSize = (windowMax - windowMin) + 1;
           const targetMinute = windowMin + (seed % windowSize);
 
-          isScheduled = currentMinute >= targetMinute;
+          // 1. Activation Notification (Once per window per day)
+          const lastAlert = config.lastAlertAt ? new Date(config.lastAlertAt) : null;
+          const alertSameDay = lastAlert && lastAlert.toDateString() === now.toDateString();
+          const alertDone = alertSameDay && config.lastAlertWindow === currentWindow;
 
-          logger.debug(`[Scanner] ${user.telegramId} Window ${currentWindow}: target=${targetMinute}, current=${currentMinute}, isScheduled=${isScheduled}`);
-          
-          if (!isScheduled) {
-            logger.debug(`[Scanner] ${user.telegramId} [${config.network}] Waiting for target minute ${targetMinute} (Current: ${currentMinute})`);
-          } else {
-            logger.info(`[Scanner] ${user.telegramId} [${config.network}] Window ${currentWindow} active. Target ${targetMinute} reached. Attempting trade...`);
+          if (!alertDone && user.notifySteps) {
+            const { sendUserNotification } = require('../bot/notifier');
+            sendUserNotification(user.telegramId, 
+              `⏳ <b>Janela Ativa (${windowMin}-${windowMax}m)</b>\nPar: ${config.tokenPair}\nMinuto de disparo: ${targetMinute}. Aguardando em silêncio...`, 
+              'info', 'STEP'
+            );
+            
+            // Update persistence for alert (Fire and forget locally, handled via DB update later if needed or immediate)
+            prisma.tradeConfig.update({
+              where: { id: config.id },
+              data: { lastAlertAt: now, lastAlertWindow: currentWindow }
+            }).catch(e => logger.error(`[Scanner] Alert update failed: ${e.message}`));
           }
-        } else {
-          logger.debug(`[Scanner] ${user.telegramId} not in any window (Minute: ${currentMinute})`);
+
+          // 2. Eligibility
+          isScheduled = currentMinute >= targetMinute;
+          
+          // Flag for TradeExecutor: Only send detailed logic log at exactly the targetMinute
+          config._isFirstAttempt = (currentMinute === targetMinute);
+
+          if (!isScheduled) {
+            logger.debug(`[Scanner] ${user.telegramId} [${config.network}] waiting for ${targetMinute}m`);
+          }
         }
       }
       return isScheduled;
     });
-
-    if (filteredConfigs.length > 0) {
-      logger.info(`[Scanner] Found ${filteredConfigs.length} users with scheduled trigger for minute: ${currentMinute}`);
-    } else {
-      const totalOperating = await prisma.tradeConfig.count({ where: { isOperating: true } });
-      if (totalOperating > 0) {
-        logger.info(`[Scanner] Scan finished. ${totalOperating} active bots exist, but none scheduled or eligible for this minute.`);
-      }
-    }
 
     // 3. Dispatch jobs to tradeQueue
     for (const config of filteredConfigs) {
       await tradeQueue.add('executeTrade', {
         userId: config.userId,
         tradeConfigId: config.id,
-        walletId: config.user.wallet.id
+        walletId: config.user.wallet.id,
+        isFirstAttempt: config._isFirstAttempt // Passed to combat log logic
       }, {
         removeOnComplete: true,
         attempts: 3,

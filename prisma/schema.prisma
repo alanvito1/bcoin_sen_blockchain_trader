@@ -99,6 +99,8 @@ model TradeConfig {
   dryRun              Boolean   @default(false)
   lastOperationAt     DateTime?
   lastOperationWindow Int?
+  lastAlertAt          DateTime?
+  lastAlertWindow      Int?
   antiRugEnabled      Boolean   @default(false)
   autoSellEnabled     Boolean   @default(false)
   priorityMode        String    @default("Aggressive")

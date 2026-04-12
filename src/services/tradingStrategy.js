@@ -176,48 +176,56 @@ async function getSignal(tokenPair, tradeConfig) {
     logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(${tfA}): ${maA ? maA.toFixed(6) : 'N/A'} | 📈 MA(${tfB}): ${maB ? maB.toFixed(6) : 'N/A'} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'OFF'}`);
 
     let signal = 'HOLD';
-    let reason = 'Preço em equilíbrio com a baliza (MA).';
     let strategyUsed = null;
+    let reason = 'Preço em equilíbrio com a baliza (MA). Aguardando oscilação tática.';
 
-    // Filter B: Higher Trend Up (Optional Veto)
-    const trendUp = (maB !== null) ? (lastPrice > maB) : true;
-
-    // Grid Logic Implementation
-    if (maA !== null) {
-      if (lastPrice < maA) {
-        // Condition: Price below Pivot (BUY Opportunity)
-        // RSI Veto: If RSI enabled, it MUST be below 40 (Oversold/Cheap enough)
-        const rsiConfirm = !tradeConfig?.rsiEnabled || (rsiValue !== null && rsiValue < 40);
-        
-        if (tradeConfig?.strategy30m && (!tradeConfig?.strategy4h || trendUp)) {
-          if (rsiConfirm) {
-            signal = 'BUY';
-            reason = `Grid Accumulator: Preço (${lastPrice.toFixed(6)}) abaixo da Baliza MA${maPeriodA} (${maA.toFixed(6)}).`;
-            strategyUsed = 'A';
-          } else {
-            reason = `HOLD: Preço < MA (Compra), mas RSI (${rsiValue?.toFixed(2)}) desautoriza a entrada.`;
-          }
-        }
-      } else if (lastPrice > maA) {
-        // Condition: Price above Pivot (SELL Opportunity)
-        // RSI Veto: If RSI enabled, it MUST be above 60 (Overbought/Expensive enough)
-        const rsiConfirm = !tradeConfig?.rsiEnabled || (rsiValue !== null && rsiValue > 60);
-        
-        if (tradeConfig?.strategy30m) {
-          if (rsiConfirm) {
-            signal = 'SELL';
-            reason = `Grid Distribution: Preço (${lastPrice.toFixed(6)}) acima da Baliza MA${maPeriodA} (${maA.toFixed(6)}).`;
-            strategyUsed = 'A';
-          } else {
-            reason = `HOLD: Preço > MA (Venda), mas RSI (${rsiValue?.toFixed(2)}) desautoriza a saída.`;
-          }
-        }
-      }
-    } else {
-      reason = 'Aguardando amostras suficientes para calcular a baliza (MA).';
+    // Guard: If we don't have MA, we can't do Grid Accumulator
+    if (maA === null) {
+      return { 
+        signal: 'HOLD', 
+        reason: 'Aguardando amostras suficientes para calcular a baliza (MA). Verifique o Histórico no Banco.',
+        price: lastPrice,
+        maRecent: null,
+        rsiValue: rsiValue
+      };
     }
 
-    return { signal, reason, price: lastPrice, strategyUsed };
+    // Grid Logic Execution (Mandatory if maA is present)
+    // Rule: Always evaluate signal if the engine is operating.
+    if (lastPrice < maA) {
+      const rsiConfirm = !tradeConfig?.rsiEnabled || (rsiValue !== null && rsiValue < 40);
+      
+      if (rsiConfirm) {
+        signal = 'BUY';
+        reason = `Grid Accumulator: Preço abaixo da Baliza MA${maPeriodA}. Acumulando ativos.`;
+        strategyUsed = 'A';
+      } else {
+        reason = `HOLD: Preço < MA (Compra), mas RSI (${rsiValue?.toFixed(2)}) veta a entrada.`;
+      }
+    } else if (lastPrice > maA) {
+      const rsiConfirm = !tradeConfig?.rsiEnabled || (rsiValue !== null && rsiValue > 60);
+      
+      if (rsiConfirm) {
+        signal = 'SELL';
+        reason = `Grid Distribution: Preço acima da Baliza MA${maPeriodA}. Realizando lucro.`;
+        strategyUsed = 'A';
+      } else {
+        reason = `HOLD: Preço > MA (Venda), mas RSI (${rsiValue?.toFixed(2)}) veta a saída.`;
+      }
+    }
+
+    return { 
+      signal, 
+      reason, 
+      price: lastPrice,
+      maRecent: maA,
+      maPeriodRecent: maPeriodA,
+      maTrend: maB,
+      maPeriodTrend: maPeriodB,
+      rsiValue: rsiValue,
+      rsiThreshold: signal === 'BUY' || (signal === 'HOLD' && lastPrice < maA) ? 40 : 60,
+      strategyUsed 
+    };
   } catch (error) {
     logger.error(`[Strategy] Error calculating signal for ${tokenPair}:`, error.message);
     return { signal: 'HOLD', reason: 'Erro técnico no cálculo.' };

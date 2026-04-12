@@ -94,10 +94,8 @@ async function processTradeJob(job) {
 
     const verbose = user.notifySteps;
 
-    // 2. Strategy Check
-    if (verbose) {
-      await sendUserNotification(user.telegramId, `🔍 <b>Passo 1/4:</b> Analisando indicadores para <code>${config.tokenPair}</code>...`, 'info', 'STEP');
-    }
+    // 2. Strategy Check (Quiet background analysis)
+    
     
     // Inject override check from job data
     if (job.data.forceSignal) {
@@ -125,9 +123,22 @@ async function processTradeJob(job) {
     }
 
     if (result.signal === 'HOLD') {
-      if (verbose) {
-        await sendUserNotification(user.telegramId, `📊 <b>Status:</b> Ciclo concluído. Recomendação: <b>HOLD</b> (Aguardar).\n<i>Motivo: ${result.reason}</i>`, 'info', 'STEP');
+      // Logic for FIRST ATTEMPT Combat Log (Mathematics)
+      if (job.data.isFirstAttempt && verbose) {
+          const rsiIndicator = config.rsiEnabled ? `📊 RSI: ${result.rsiValue ? result.rsiValue.toFixed(2) : 'N/A'} (Veto se > ${result.rsiThreshold})` : '📊 RSI: Desativado';
+          const combatLog = `⚖️ <b>Veredito: HOLD</b> (Aguardar)
+Par: <code>${config.tokenPair}</code>
+
+💰 Preço: ${result.price.toFixed(6)}
+📉 Baliza MA: ${result.maRecent ? result.maRecent.toFixed(6) : 'N/A'} (Pivot)
+${rsiIndicator}
+
+📝 <i>Motivo: ${result.reason}</i>
+⏳ <i>Retentando em silêncio no backgound...</i>`;
+
+          await sendUserNotification(user.telegramId, combatLog, 'info', 'STEP');
       }
+      
       logger.info(`[TradeExecutor] Signal: HOLD for ${userId}. Reason: ${result.reason}`);
       return { success: true, signal: 'HOLD', reason: result.reason };
     }
@@ -179,12 +190,10 @@ async function processTradeJob(job) {
     const windowIndex = inWindow1 ? 1 : (inWindow2 ? 2 : null);
 
     const isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
-    if (verbose) {
-      await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '💰 '}<b>Passo 2/4:</b> Verificando saldo e taxas na rede <code>${config.network}</code>...`, 'info', 'STEP');
-    }
-
     
     if (isDryRun) {
+      logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
+    } else {
       logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
     } else {
       const balances = await balanceService.checkBalances(walletData.publicAddress, config.network);
@@ -210,9 +219,6 @@ async function processTradeJob(job) {
     };
 
     // 6. Execute Swap
-    if (verbose) {
-      await sendUserNotification(user.telegramId, `${isDryRun ? '🧪 <b>DRY RUN:</b> ' : '🚀 '}<b>Passo 3/4:</b> ${isDryRun ? 'Simulando envio de transação...' : 'Enviando transação de ' + result.signal + ' para a pool...'}`, 'info', 'STEP');
-    }
     
     let txHash;
     let gasUsed = '0.001';
@@ -263,13 +269,32 @@ async function processTradeJob(job) {
       logger.error(`[TradeExecutor] Error recording history: ${dbErr.message}`);
     }
 
-    // Final Notifications
+    // Final Notifications: Combat Log of Success
     const networkBase = globalConfig.networks[netKey];
     const explorerUrl = `${networkBase.explorerUrl}/tx/${txHash}`;
+    const rsiInfo = config.rsiEnabled ? `📊 RSI: ${result.rsiValue?.toFixed(2)} (Limite: ${result.rsiThreshold})` : '';
     
     const notificationText = isDryRun
-      ? `🧪 <b>SIMULAÇÃO CONCLUÍDA</b>\nPar: ${config.tokenPair}\nBomba disparada virtualmente sem usar saldo real.\n\n<i>Efeito surpresa testado com sucesso.</i>`
-      : `✅ <b>DETONAÇÃO REALIZADA!</b>\nPar: ${config.tokenPair}\nTipo: ${result.signal}\nValor: ${executionAmount} ${tokenSymbol}\nPreço: ${result.price.toFixed(6)}\n\n🔗 <a href="${explorerUrl}">Ver no Explorer</a>`;
+      ? `🧪 <b>SIMULAÇÃO CONCLUÍDA</b>
+Par: <code>${config.tokenPair}</code>
+Bomba disparada virtualmente.
+
+💰 Preço: ${result.price.toFixed(6)}
+📉 Baliza MA: ${result.maRecent?.toFixed(6)}
+${rsiInfo}
+
+<i>Efeito surpresa testado com sucesso.</i>`
+      : `✅ <b>DETONAÇÃO REALIZADA!</b>
+Par: <code>${config.tokenPair}</code>
+Tipo: <b>${result.signal}</b>
+
+💰 Preço: ${result.price.toFixed(6)}
+📉 Baliza MA: ${result.maRecent?.toFixed(6)}
+${rsiInfo}
+
+💎 Valor: ${executionAmount} ${tokenSymbol}
+⛽ Gás: ${gasUsed} ${networkBase.nativeSymbol}
+🔗 <a href="${explorerUrl}">Ver no Explorer</a>`;
 
     await sendUserNotification(user.telegramId, notificationText, isDryRun ? 'info' : 'success');
 
