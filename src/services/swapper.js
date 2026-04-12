@@ -224,11 +224,25 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       tokenOut = tokenConfig.address;
       
       if (amountType === 'token' && customAmount) {
-        logger.step(`[${networkName}] Estimando custo para ${customAmount} ${tokenConfig.symbol}...`);
-        const pathReverse = [tokenOut, tokenIn];
+        logger.step(`[${networkName}] Estimando custo para ${customAmount} ${tokenConfig.symbol} via Multi-Hop...`);
+        
+        // 1. Identify best path for estimation (Reverse: OUT -> IN)
+        const bridges = networkName === 'polygon' 
+          ? [network.usdt, '0x7ceB23fD6bC0ad59E62c2551523066Ab99653907', '0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', '0x8f3Cf7ad23Cd3BaBB3b0195a012d081919717075'] 
+          : [network.usdt, '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x2170Ed0880ac9A755fd29B2688956BD959f933F8', '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c'];
+        const validBridges = [network.wrappedNative, ...bridges.filter(b => b && b.toLowerCase() !== tokenConfig.address.toLowerCase() && b.toLowerCase() !== network.wrappedNative.toLowerCase())];
+        
+        const pathReverse = await getBestPath(routerContract, ethers.parseUnits(customAmount.toString(), decimals), tokenOut, tokenIn, validBridges);
+        
+        if (!pathReverse) {
+          const err = `Impossível estimar rota para ${tokenConfig.symbol} (Sem liquidez).`;
+          logger.error(`[${networkName}] ${err}`);
+          return { status: 0, error: err };
+        }
+
         const amountsInNeeded = await withRPCRetry(() => routerContract.getAmountsOut(ethers.parseUnits(customAmount.toString(), decimals), pathReverse), networkName);
         amountIn = (amountsInNeeded[amountsInNeeded.length - 1] * 105n) / 100n; // Add 5% buffer
-        isNativeIn = true;
+        isNativeIn = tokenIn.toLowerCase() === network.wrappedNative.toLowerCase();
       } else {
         amountIn = ethers.parseEther(customAmount || config.defaultBuyAmount || '1.0');
         isNativeIn = true;
