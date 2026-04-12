@@ -194,8 +194,6 @@ ${rsiIndicator}
     if (isDryRun) {
       logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
     } else {
-      logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
-    } else {
       const balances = await balanceService.checkBalances(walletData.publicAddress, config.network);
       if (!balances.hasEnoughGas) {
         throw new Error(`Insufficient funds for gas: ${balances.nativeBalance}`);
