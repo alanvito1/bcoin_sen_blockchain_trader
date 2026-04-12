@@ -80,6 +80,7 @@ module.exports = {
       usdt: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
       tokens: [
         { name: 'BCOIN', address: '0xb2c63830d4478cb331142fac075a39671a5541dc', symbol: 'BCOIN', decimals: 18, pool: '0x8b4e00810c927bb1c02dee73d714a31121689ab3' },
+        { name: 'BOMB', address: '0xb2c63830d4478cb331142fac075a39671a5541dc', symbol: 'BOMB', decimals: 18, pool: '0x8b4e00810c927bb1c02dee73d714a31121689ab3' },
         { name: 'SEN', address: '0xfe302b8666539d5046cd9aa0707bb327f5f94c22', symbol: 'SEN', decimals: 18, pool: '0xd6c2de543dd1570315cc0bebcdaea522553b7e2b' },
         { name: 'USDT', address: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', symbol: 'USDT', decimals: 6 }
       ],

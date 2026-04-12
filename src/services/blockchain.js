@@ -3,55 +3,72 @@ const config = require('../config');
 const logger = require('../utils/logger');
 
 /**
- * Bulletproof Round-Robin Provider
- * Uses a Proxy to transparently failover between multiple RPC nodes on every call.
- * Intercepts infrastructure failures to provide user-friendly feedback.
+ * Resilient Provider for Ethers.js v6
+ * Delegates calls to a list of JsonRpcProviders with automatic failover.
+ * This avoids Proxy-related context issues (target=null) in ethers internal logic.
  */
-function createBulletproofProvider(networkKey) {
-  const netConfig = config.networks[networkKey];
-  const rpcList = netConfig.rpc.split(',').map(url => url.trim()).filter(Boolean);
-  
-  const providers = rpcList.map(url => new ethers.JsonRpcProvider(url, netConfig.chainId, { staticNetwork: true }));
-  
-  if (providers.length === 0) {
-    throw new Error(`Nenhum nó RPC configurado para a rede ${networkKey}`);
+class BulletproofProvider {
+  constructor(networkKey) {
+    this.networkKey = networkKey;
+    const netConfig = config.networks[networkKey];
+    this.rpcList = netConfig.rpc.split(',').map(url => url.trim()).filter(Boolean);
+    
+    this.providers = this.rpcList.map(url => new ethers.JsonRpcProvider(url, netConfig.chainId, { staticNetwork: true }));
+    
+    if (this.providers.length === 0) {
+      throw new Error(`Nenhum nó RPC configurado para a rede ${networkKey}`);
+    }
+
+    // Reference to the first provider for legacy field access if needed
+    this.provider = this.providers[0];
   }
 
-  // Create a handler that retries on all providers
-  return new Proxy(providers[0], {
-    get(target, prop) {
-      const originalValue = target[prop];
-      
-      if (typeof originalValue === 'function') {
-        return async (...args) => {
-          let lastError;
-          for (let i = 0; i < providers.length; i++) {
-            const provider = providers[i];
-            try {
-              return await provider[prop].apply(provider, args);
-            } catch (err) {
-              lastError = err;
-              const rpcUrl = provider._getAddress ? provider._getAddress() : `node-${i}`;
-              // Silent failover: Log internally but don't propagate to application layer until all nodes fail
-              logger.warn(`[Blockchain] ⚠️ RPC Node Failover (${rpcUrl}) network=${networkKey.toUpperCase()}: ${err.message}`);
-              continue;
-            }
-          }
-          
-          // Only throw if EVERY node in the list has failed
-          const friendlyError = new Error(`🔴 OPERAÇÃO CANCELADA: Falha massiva de comunicação com a Blockchain (RPC Down na rede ${networkKey.toUpperCase()})`);
-          friendlyError.originalError = lastError;
-          throw friendlyError;
-        };
-      }
-      return originalValue;
+  async _execute(method, args) {
+    let lastError;
+    for (let i = 0; i < this.providers.length; i++) {
+        const provider = this.providers[i];
+        try {
+            return await provider[method](...args);
+        } catch (err) {
+            lastError = err;
+            const rpcUrl = this.rpcList[i] || 'unknown';
+            logger.warn(`[Blockchain] ⚠️ Failover (${this.networkKey.toUpperCase()}): node=${rpcUrl} error=${err.message}`);
+            continue;
+        }
     }
-  });
+    
+    const friendlyError = new Error(`🔴 FALHA MASSIVA: Comunicação perdida com a rede ${this.networkKey.toUpperCase()}`);
+    friendlyError.originalError = lastError;
+    throw friendlyError;
+  }
+
+  // Explicit delegation of most common methods to ensure stability
+  getTransactionCount(...args) { return this._execute('getTransactionCount', args); }
+  getBalance(...args) { return this._execute('getBalance', args); }
+  getFeeData(...args) { return this._execute('getFeeData', args); }
+  getLogs(...args) { return this._execute('getLogs', args); }
+  getCode(...args) { return this._execute('getCode', args); }
+  getStorage(...args) { return this._execute('getStorage', args); }
+  getTransaction(...args) { return this._execute('getTransaction', args); }
+  getTransactionReceipt(...args) { return this._execute('getTransactionReceipt', args); }
+  getBlock(...args) { return this._execute('getBlock', args); }
+  getBlockNumber(...args) { return this._execute('getBlockNumber', args); }
+  getNetwork(...args) { return this.providers[0].getNetwork(); } // Network is static
+  sendTransaction(...args) { return this._execute('broadcastTransaction', args); }
+  broadcastTransaction(...args) { return this._execute('broadcastTransaction', args); }
+  call(...args) { return this._execute('call', args); }
+  estimateGas(...args) { return this._execute('estimateGas', args); }
+
+  // Support for ethers Contract/Wallet needs
+  get _isProvider() { return true; }
+  on(...args) { return this.providers[0].on(...args); }
+  once(...args) { return this.providers[0].once(...args); }
+  emit(...args) { return this.providers[0].emit(...args); }
 }
 
 const providers = {
-  bsc: createBulletproofProvider('bsc'),
-  polygon: createBulletproofProvider('polygon')
+  bsc: new BulletproofProvider('bsc'),
+  polygon: new BulletproofProvider('polygon')
 };
 
 const wallets = {

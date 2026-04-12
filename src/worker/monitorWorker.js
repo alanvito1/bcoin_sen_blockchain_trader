@@ -27,6 +27,11 @@ async function checkTransitIntegrity() {
     }
 
     if (!transitAddress) {
+      logger.warn('[Monitor] Transit address not found. Skipping integrity check.');
+      return;
+    }
+
+    if (!transitAddress) {
       logger.warn('[Monitor] No Transit Wallet address found to monitor.');
       return;
     }
