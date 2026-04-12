@@ -264,7 +264,6 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
             } else {
                 throw new Error(`Ambas as rotas falharam na simulação (Liquidez/Price Impact). Original error: ${simError.message}`);
             }
-            }
         } else {
             throw simError;
         }
