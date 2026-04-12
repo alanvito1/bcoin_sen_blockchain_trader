@@ -21,7 +21,9 @@ const ERC20_ABI = [
 const ROUTER_ABI = [
   'function swapExactTokensForETHSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
   'function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
-  'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)'
+  'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable',
+  'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
+  'function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts)'
 ];
 
 /**
@@ -71,15 +73,16 @@ async function checkPendingTransactions(networkName, wallet) {
 }
 
 /**
- * Finds the best trade path (direct or through bridge tokens) to maximize output.
+ * Finds the best trade path (direct or through bridge tokens).
  * @param {ethers.Contract} routerContract - The DEX router contract.
- * @param {bigint} amountIn - Amount to swap in wei.
- * @param {string} tokenIn - Address of token in.
- * @param {string} tokenOut - Address of token out.
- * @param {Array<string>} bridgeTokens - List of bridge token addresses (WETH, USDT, etc).
+ * @param {bigint} amount - The reference amount (Input or Output depending on mode).
+ * @param {string} tokenIn - Source token address.
+ * @param {string} tokenOut - Target token address.
+ * @param {string[]} [bridgeTokens=[]] - Intermediate bridge tokens.
+ * @param {string} [mode='out'] - 'in' (estimating input needed) or 'out' (estimating output obtained).
  * @returns {Promise<Array<string>|null>} The best path detected.
  */
-async function getBestPath(routerContract, amountIn, tokenIn, tokenOut, bridgeTokens = []) {
+async function getBestPath(routerContract, amount, tokenIn, tokenOut, bridgeTokens = [], mode = 'out') {
   const paths = [[tokenIn, tokenOut]];
   for (const bridge of bridgeTokens) {
     if (bridge.toLowerCase() !== tokenIn.toLowerCase() && bridge.toLowerCase() !== tokenOut.toLowerCase()) {
@@ -88,25 +91,33 @@ async function getBestPath(routerContract, amountIn, tokenIn, tokenOut, bridgeTo
   }
 
   let bestPath = null;
-  let maxAmount = 0n;
+  let bestValue = mode === 'out' ? 0n : ethers.MaxUint256;
 
   for (const path of paths) {
     try {
-      const amounts = await withRPCRetry(() => routerContract.getAmountsOut(amountIn, path), 'rpc-path');
-      const out = amounts[amounts.length - 1];
-      if (out > maxAmount) {
-        maxAmount = out;
-        bestPath = path;
+      if (mode === 'out') {
+        const amounts = await withRPCRetry(() => routerContract.getAmountsOut(amount, path), 'rpc-path');
+        const outValue = amounts[amounts.length - 1];
+        if (outValue > bestValue) {
+          bestValue = outValue;
+          bestPath = path;
+        }
+      } else {
+        const amounts = await withRPCRetry(() => routerContract.getAmountsIn(amount, path), 'rpc-path');
+        const inValue = amounts[0];
+        if (inValue < bestValue) {
+          bestValue = inValue;
+          bestPath = path;
+        }
       }
     } catch (e) {
       // Path not liquid
     }
   }
 
-  // LOG: Transparency for Triangular Routing
   if (bestPath && bestPath.length > 2) {
     const bridgeSymbol = bestPath[1].toLowerCase().includes('0x0d500') ? 'WPOL' : 'BRIDGE';
-    logger.info(`[PathFinder] ⚠️ Rota Direta insuficiente. Ativando Rota Triangular via ${bridgeSymbol}.`);
+    logger.info(`[PathFinder] ⚠️ Rota Direta insuficiente. Ativando Rota Triangular via ${bridgeSymbol} (${mode.toUpperCase()}).`);
   }
 
   return bestPath;
@@ -232,7 +243,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
           : [network.usdt, '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x2170Ed0880ac9A755fd29B2688956BD959f933F8', '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c'];
         const validBridges = [network.wrappedNative, ...bridges.filter(b => b && b.toLowerCase() !== tokenConfig.address.toLowerCase() && b.toLowerCase() !== network.wrappedNative.toLowerCase())];
         
-        const pathReverse = await getBestPath(routerContract, ethers.parseUnits(customAmount.toString(), decimals), tokenOut, tokenIn, validBridges);
+        const pathReverse = await getBestPath(routerContract, ethers.parseUnits(customAmount.toString(), decimals), tokenIn, tokenOut, validBridges, 'in');
         
         if (!pathReverse) {
           const err = `Impossível estimar rota para ${tokenConfig.symbol} (Sem liquidez).`;
@@ -240,8 +251,8 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
           return { status: 0, error: err };
         }
 
-        const amountsInNeeded = await withRPCRetry(() => routerContract.getAmountsOut(ethers.parseUnits(customAmount.toString(), decimals), pathReverse), networkName);
-        amountIn = (amountsInNeeded[amountsInNeeded.length - 1] * 105n) / 100n; // Add 5% buffer
+        const amountsInNeeded = await withRPCRetry(() => routerContract.getAmountsIn(ethers.parseUnits(customAmount.toString(), decimals), pathReverse), networkName);
+        amountIn = (amountsInNeeded[0] * 105n) / 100n; // Add 5% buffer
         isNativeIn = tokenIn.toLowerCase() === network.wrappedNative.toLowerCase();
       } else {
         amountIn = ethers.parseEther(customAmount || config.defaultBuyAmount || '1.0');
