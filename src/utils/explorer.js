@@ -21,16 +21,21 @@ async function getTransactionStatus(networkName, txHash) {
   }
 }
 
+/**
+ * Fetches current gas prices for Polygon from the official Gas Station.
+ * Returns the 'fast' profile for aggressive execution as requested by the Founder.
+ */
 async function getPolygonGasPrice() {
   try {
-    // Polygon Gas Station is often more reliable than RPC for Polygon
+    // Polygon Gas Station is the gold standard for EIP-1559 on Polygon
     const response = await axios.get('https://gasstation.polygon.technology/v2');
     return {
-      maxPriorityFee: response.data.fast.maxPriorityFee,
-      maxFee: response.data.fast.maxFee
+      maxPriorityFee: response.data.fast.maxPriorityFee, // Aggressive Priority
+      maxFee: response.data.fast.maxFee,
+      estimatedBaseFee: response.data.estimatedBaseFee
     };
   } catch (error) {
-    console.warn(`[Explorer] Error fetching Polygon gas:`, error.message);
+    console.warn(`[Explorer] Gas Station error, using basic RPC estimate:`, error.message);
     return null;
   }
 }

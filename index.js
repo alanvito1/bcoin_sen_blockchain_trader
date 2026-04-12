@@ -7,6 +7,17 @@ BigInt.prototype.toJSON = function () {
 const prisma = require('./src/config/prisma');
 const logger = require('./src/utils/logger');
 
+// BULLETPROOF: Global Exception Handlers
+process.on('uncaughtException', (err) => {
+  logger.error(`[FATAL] Uncaught Exception: ${err.message}`);
+  logger.error(err.stack);
+  // We don't exit(1) here to allow other motors/workers to potentially survive
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error(`[FATAL] Unhandled Rejection at: ${promise}, reason: ${reason}`);
+});
+
 logger.info('🚀 [System] Multi-tenant Auto-Trader initialized.');
 logger.info('- Bot UI: Online');
 logger.info('- Scanner: Active (1m interval)');

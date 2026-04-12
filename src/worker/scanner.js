@@ -85,28 +85,32 @@ const scannerTask = cron.schedule('* * * * *', async () => {
           const windowMin = currentWindow === 1 ? config.window1Min : config.window2Min;
           const windowMax = currentWindow === 1 ? config.window1Max : config.window2Max;
           const windowSize = (windowMax - windowMin) + 1;
-          const targetMinute = windowMin + (seed % windowSize);
 
-          // 1. Activation Notification (Once per window per day)
+          // 1. Target Minute Identification (Telemetry)
+          const targetMinute = windowMin + (seed % windowSize);
+          logger.debug(`[Scanner] User ${user.telegramId} | Network: ${config.network} | Target Minute for Window ${currentWindow}: ${targetMinute}`);
+
+          // 2. Activation Notification (Once per window per day)
           const lastAlert = config.lastAlertAt ? new Date(config.lastAlertAt) : null;
           const alertSameDay = lastAlert && lastAlert.toDateString() === now.toDateString();
           const alertDone = alertSameDay && config.lastAlertWindow === currentWindow;
 
           if (!alertDone && user.notifySteps) {
+            const netLabel = config.network.toUpperCase();
             const { sendUserNotification } = require('../bot/notifier');
             sendUserNotification(user.telegramId, 
-              `⏳ <b>Janela Ativa (${windowMin}-${windowMax}m)</b>\nPar: ${config.tokenPair}\nMinuto de disparo: ${targetMinute}. Aguardando em silêncio...`, 
+              `⏳ <b>Janela Ativa (${windowMin}-${windowMax}m) [Rede: ${netLabel}]</b>\nPar: ${config.tokenPair}\nMinuto de disparo: ${targetMinute}. Aguardando em silêncio...`, 
               'info', 'STEP'
             );
             
-            // Update persistence for alert (Fire and forget locally, handled via DB update later if needed or immediate)
+            // Update persistence for alert
             prisma.tradeConfig.update({
               where: { id: config.id },
               data: { lastAlertAt: now, lastAlertWindow: currentWindow }
             }).catch(e => logger.error(`[Scanner] Alert update failed: ${e.message}`));
           }
 
-          // 2. Eligibility
+          // 3. Eligibility
           isScheduled = currentMinute >= targetMinute;
           
           // Flag for TradeExecutor: Only send detailed logic log at exactly the targetMinute

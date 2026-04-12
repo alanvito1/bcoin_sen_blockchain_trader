@@ -102,6 +102,13 @@ async function getBestPath(routerContract, amountIn, tokenIn, tokenOut, bridgeTo
       // Path not liquid
     }
   }
+
+  // LOG: Transparency for Triangular Routing
+  if (bestPath && bestPath.length > 2) {
+    const bridgeSymbol = bestPath[1].toLowerCase().includes('0x0d500') ? 'WPOL' : 'BRIDGE';
+    logger.info(`[PathFinder] ⚠️ Rota Direta insuficiente. Ativando Rota Triangular via ${bridgeSymbol}.`);
+  }
+
   return bestPath;
 }
 
@@ -241,10 +248,13 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       : [network.usdt, '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x2170Ed0880ac9A755fd29B2688956BD959f933F8', '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c'];
     
     const validBridges = bridges.filter(b => b && b.toLowerCase() !== tokenConfig.address.toLowerCase());
-    const path = await getBestPath(routerContract, amountIn, tokenIn, tokenOut, validBridges);
+    
+    // Ensure wrappedNative is prioritized for liquidity
+    const routingBridges = [network.wrappedNative, ...validBridges.filter(b => b.toLowerCase() !== network.wrappedNative.toLowerCase())];
+    const path = await getBestPath(routerContract, amountIn, tokenIn, tokenOut, routingBridges);
     
     if (path && path.length > 2) {
-      logger.info(`[${networkName}] Rota multi-hop detectada: [Bridges usadas]`);
+      logger.info(`[${networkName}] Rota multi-hop detectada: ${path.map(p => p.slice(0, 6)).join(' ➔ ')}`);
     }
     
     if (!path) {
@@ -323,27 +333,94 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
     logger.info(`[${networkName}] ✅ Tx Enviada: ${explorer.getExplorerLink(networkName, tx.hash)}`);
     // Increase retries for waiting for the receipt, as nodes might take time to sync "Unknown block"
-    const receipt = await withRPCRetry(() => tx.wait(), networkName, 10, 3000);
-    
-    if (receipt.status === 1) {
-      const gasUsed = receipt.gasUsed ?? 0n;
-      // Robust fallback for gas price in v6
-      const gasPricePaid = receipt.effectiveGasPrice ?? receipt.gasPrice ?? tx.gasPrice ?? 0n;
-      const gasCost = gasUsed * gasPricePaid;
-      const gasFormatted = parseFloat(ethers.formatEther(gasCost)).toFixed(6);
-      const nativeSymbol = networkName === 'polygon' ? 'POL' : 'BNB';
-      
-      logger.success(`[${networkName}] 🎊 Sucesso! (Gas: ${gasFormatted} ${nativeSymbol})`);
-      
-      return { ...receipt, status: 1, hash: tx.hash, gasFormatted };
-    } else {
-      logger.error(`[${networkName}] Falha na transação.`);
-      return { status: 0, hash: tx.hash };
-    }
+    let retryCount = 0;
+    const maxRetries = 1;
 
-  } catch (error) {
-    logger.error(`Erro no ${tokenConfig.symbol}: ${error.message}`);
-    return { status: 0, error: error.message };
+    while (retryCount <= maxRetries) {
+      try {
+        let retryOptions = { gasLimit: 350000 };
+        if (isNativeIn) retryOptions.value = amountIn;
+
+        // --- POLYGON: EIP-1559 Forced Aggressive Mode ---
+        if (networkName === 'polygon') {
+          const gas = await explorer.getPolygonGasPrice();
+          if (gas) {
+            // Aggressive bump for next try: 1.1x Priority Fee
+            const bumpFactor = 110n + BigInt(retryCount * 20); // Scale with retries
+            const priorityFee = (ethers.parseUnits(gas.maxPriorityFee.toString(), 'gwei') * bumpFactor) / 100n;
+            const baseFee = ethers.parseUnits(gas.maxFee.toString(), 'gwei');
+            
+            retryOptions.maxPriorityFeePerGas = priorityFee;
+            retryOptions.maxFeePerGas = baseFee + priorityFee; // Ensure maxFee covers the new priority
+            
+            if (retryCount > 0) {
+                logger.warn(`[${networkName}] 🔄 Retentativa AGRESSIVA! Prioridade: ${ethers.formatUnits(priorityFee, 'gwei')} gwei`);
+            }
+          }
+        } else {
+          // BSC: Legacy Logic
+          const gasPrice = await withRPCRetry(() => wallet.provider.getFeeData(), networkName);
+          const currentGasPrice = gasPrice.gasPrice || ethers.parseUnits('5', 'gwei');
+          const adjustedGasPrice = (currentGasPrice * (110n + BigInt(retryCount * 10))) / 100n;
+          retryOptions.gasPrice = adjustedGasPrice;
+
+          if (retryCount > 0) {
+              logger.warn(`[${networkName}] 🔄 Retentativa em andamento: ${ethers.formatUnits(adjustedGasPrice, 'gwei')} gwei`);
+          }
+        }
+
+        const mevRouterContract = new ethers.Contract(network.router, ROUTER_ABI, broadcastWallet);
+        let currentTx;
+        
+        if (isNativeIn) {
+          const routerBuy = new ethers.Contract(network.router, [
+            ...ROUTER_ABI,
+            'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable'
+          ], broadcastWallet);
+          currentTx = await routerBuy.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, wallet.address, deadline, retryOptions);
+        } else if (isNativeOut) {
+          currentTx = await mevRouterContract.swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, retryOptions);
+        } else {
+          currentTx = await mevRouterContract.swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, retryOptions);
+        }
+
+        logger.info(`[${networkName}] 🔄 Tx Broadcasted: ${currentTx.hash}. Aguardando confirmação...`);
+        
+        const receipt = await withRPCRetry(() => currentTx.wait(1), networkName, 5, 4000);
+        
+        if (receipt.status === 1) {
+          logger.info(`[${networkName}] ✨ Transação Confirmada Bloco ${receipt.blockNumber}`);
+          const gasFormatted = ethers.formatEther(receipt.gasUsed * (receipt.gasPrice || 0n));
+          return { ...receipt, status: 1, hash: currentTx.hash, gasFormatted };
+        } else {
+          throw new Error('STATUS_REVERTED');
+        }
+
+      } catch (error) {
+        const isVolatilityError = error.message.includes('STATUS_REVERTED') || 
+                                 error.message.includes('replacement transaction underpriced') ||
+                                 error.code === 'CALL_EXCEPTION';
+
+        if (isVolatilityError && retryCount < maxRetries) {
+          retryCount++;
+          const delay = 3000 * retryCount;
+          logger.warn(`[${networkName}] Falha por volatilidade detectada. Aguardando ${delay}ms para Plano B (Retry)...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+
+        let friendlyError = 'Erro desconhecido na blockchain.';
+        if (error.message.includes('STATUS_REVERTED') || error.code === 'CALL_EXCEPTION') {
+          friendlyError = '❌ OPERAÇÃO CANCELADA: A transação reverteu na blockchain. Causa provável: Slippage insuficiente ou oscilação brusca de preço/gas.';
+        } else if (error.message.includes('insufficient funds')) {
+          friendlyError = '❌ SALDO INSUFICIENTE: A carteira não possui saldo nativo suficiente para cobrir o gás.';
+        }
+
+        return { status: 0, hash: null, error: friendlyError, rawError: error.message };
+      }
+    }
+  } catch (globalErr) {
+    return { status: 0, hash: null, error: globalErr.message };
   }
 }
 

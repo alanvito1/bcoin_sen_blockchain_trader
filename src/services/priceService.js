@@ -51,33 +51,91 @@ async function getTokenPrice(network, symbol) {
     logger.warn(`[PriceService] Local Oracle Query Failed: ${dbErr.message}`);
   }
 
-  // 3. Fallback to API Fetch (GeckoTerminal) if DB is stale or missing
-  const netConfig = config.networks[network.toLowerCase()];
-  if (!netConfig) throw new Error(`Network ${network} not found in config.`);
-
-  const tokenInfo = netConfig.tokens.find(t => t.symbol === symbol.toUpperCase());
-  if (!tokenInfo || !tokenInfo.pool) {
-    throw new Error(`Token ${symbol} or its pool not found on ${network}.`);
-  }
-
-  // GeckoTerminal network mapping
-  const geckoNetwork = network.toLowerCase() === 'polygon' ? 'polygon_pos' : 'bsc';
-  const poolAddress = tokenInfo.pool.toLowerCase();
-
-  const url = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/pools/${poolAddress}`;
+  // 3. WATERFALL ORACLE: STEP 1 - DexScreener (Reliable UI API)
+  const netKey = network.toLowerCase();
+  const tokenInfo = config.networks[netKey]?.tokens.find(t => t.symbol === symbol.toUpperCase());
+  if (!tokenInfo) throw new Error(`Token ${symbol} not found on ${network}.`);
+  const tokenAddress = tokenInfo.address.toLowerCase();
 
   try {
-    logger.info(`[PriceService] 🌐 Fetching live price for ${symbol} (DB stale)...`);
-    const response = await fetchPrice(url);
+    const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
+    const dexData = await axios.get(dexUrl, { timeout: 5000 }).then(r => r.data);
     
-    const attributes = response.data.attributes;
-    const price = parseFloat(attributes.base_token_price_usd);
-
-    if (!price || isNaN(price)) {
-      throw new Error(`Invalid price received for ${symbol}`);
+    const pair = dexData.pairs?.[0];
+    if (pair && pair.priceUsd) {
+      const price = parseFloat(pair.priceUsd);
+      await savePriceToDb(network, symbol, price);
+      return price;
     }
+  } catch (e) {
+    logger.warn(`[PriceService] DexScreener failed for ${symbol}: ${e.message}`);
+  }
 
-    // Update DB with the fresh price too (Self-Correction)
+  // 4. WATERFALL ORACLE: STEP 2 - GeckoTerminal (Backup API)
+  if (tokenInfo.pool) {
+    const geckoNetwork = netKey === 'polygon' ? 'polygon_pos' : 'bsc';
+    const poolAddress = tokenInfo.pool.toLowerCase();
+    const geckoUrl = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/pools/${poolAddress}`;
+
+    try {
+      const gResponse = await axios.get(geckoUrl, { timeout: 5000 }).then(r => r.data);
+      const price = parseFloat(gResponse.data.attributes.base_token_price_usd);
+      if (price > 0) {
+        await savePriceToDb(network, symbol, price);
+        return price;
+      }
+    } catch (e) {
+      logger.warn(`[PriceService] GeckoTerminal failed for ${symbol}: ${e.message}`);
+    }
+  }
+
+  // 5. WATERFALL ORACLE: STEP 3 - On-Chain (The Immutable Truth)
+  // Uses router.getAmountsOut to calculate price directly from the pool
+  try {
+    const { providers } = require('./blockchain');
+    const provider = providers[netKey];
+    const routerAddress = config.networks[netKey].router;
+    const usdtAddress = config.networks[netKey].usdt;
+    const wrappedNative = config.networks[netKey].wrappedNative;
+
+    const routerAbi = ['function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'];
+    const routerContract = new ethers.Contract(routerAddress, routerAbi, provider);
+
+    // Path: Token -> WrappedNative -> USDT (Most liquid path for small tokens)
+    const path = [tokenAddress, wrappedNative, usdtAddress];
+    const amountIn = ethers.parseUnits('1', tokenInfo.decimals || 18);
+    
+    const amounts = await routerContract.getAmountsOut(amountIn, path);
+    const price = parseFloat(ethers.formatUnits(amounts[amounts.length - 1], config.networks[netKey].usdtDecimals || 18));
+
+    if (price > 0) {
+      logger.info(`[PriceService] 🔗 On-Chain Oracle used for ${symbol}: $${price}`);
+      await savePriceToDb(network, symbol, price);
+      return price;
+    }
+  } catch (e) {
+    logger.warn(`[PriceService] On-Chain Oracle failed for ${symbol}: ${e.message}`);
+  }
+
+  // 6. STALE FALLBACK: If all else fails, use the latest known price from DB regardless of age
+  const veryStaleTick = await prisma.priceTick.findFirst({
+    where: { symbol: symbol.toUpperCase() + '/USDT', network: network.toUpperCase() },
+    orderBy: { timestamp: 'desc' }
+  });
+  
+  if (veryStaleTick) {
+    logger.error(`[PriceService] 🚨 ALL ORACLES FAILED for ${symbol}. Using STALE price from ${veryStaleTick.timestamp}`);
+    return veryStaleTick.price;
+  }
+  
+  throw new Error(`Não foi possível obter o preço de ${symbol} em nenhum oráculo (FÍSICO OU API).`);
+}
+
+/**
+ * Persist price to DB for fast local retrieval
+ */
+async function savePriceToDb(network, symbol, price) {
+  try {
     await prisma.priceTick.create({
       data: {
         symbol: symbol.toUpperCase() + '/USDT',
@@ -85,23 +143,11 @@ async function getTokenPrice(network, symbol) {
         price,
         timestamp: new Date()
       }
-    }).catch(() => {});
-
-    return price;
-  } catch (error) {
-    // Last resort: Check if we have ANY stale data in DB
-    const veryStaleTick = await prisma.priceTick.findFirst({
-      where: { symbol: symbol.toUpperCase() + '/USDT', network: network.toUpperCase() },
-      orderBy: { timestamp: 'desc' }
     });
-    
-    if (veryStaleTick) {
-      logger.warn(`[PriceService] API Failed for ${symbol}, using STALE DB price ($${veryStaleTick.price}).`);
-      return veryStaleTick.price;
-    }
-    
-    throw new Error(`Não foi possível obter o preço de ${symbol} no momento.`);
+  } catch (e) {
+    // Ignore duplicate key or minor DB errors
   }
+}
 }
 
 module.exports = {

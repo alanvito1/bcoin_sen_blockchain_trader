@@ -10,7 +10,8 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const { Worker } = require('bullmq');
-const { Wallet, JsonRpcProvider } = require('ethers');
+const { Wallet } = require('ethers');
+const { providers: blockchainProviders } = require('../services/blockchain');
 const prisma = require('../config/prisma');
 const redisConnection = require('../config/redis');
 const encryption = require('../utils/encryption');
@@ -94,6 +95,12 @@ async function processTradeJob(job) {
 
     const verbose = user.notifySteps;
 
+    // --- NETWORK & NOMENCLATURE PREPARATION (UX Rules) ---
+    const netKey = config.network.toLowerCase();
+    const netLabel = netKey.toUpperCase();
+    let [tokenSymbol] = config.tokenPair.split('/');
+    const displaySymbol = (netKey === 'polygon' && tokenSymbol.toUpperCase() === 'BCOIN') ? 'BOMB' : tokenSymbol;
+
     // 2. Strategy Check (Quiet background analysis)
     
     
@@ -126,8 +133,10 @@ async function processTradeJob(job) {
       // Logic for FIRST ATTEMPT Combat Log (Mathematics)
       if (job.data.isFirstAttempt && verbose) {
           const rsiIndicator = config.rsiEnabled ? `📊 RSI: ${result.rsiValue ? result.rsiValue.toFixed(2) : 'N/A'} (Veto se > ${result.rsiThreshold})` : '📊 RSI: Desativado';
-          const combatLog = `⚖️ <b>Veredito: HOLD</b> (Aguardar)
-Par: <code>${config.tokenPair}</code>
+          const displayPair = `${displaySymbol}/USDT`;
+          
+          const combatLog = `⚖️ <b>Veredito: HOLD [Rede: ${netLabel}]</b>
+Par: <code>${displayPair}</code>
 
 💰 Preço: ${result.price.toFixed(6)}
 📉 Baliza MA: ${result.maRecent ? result.maRecent.toFixed(6) : 'N/A'} (Pivot)
@@ -160,14 +169,17 @@ ${rsiIndicator}
       authTag: walletData.authTag
     });
 
-    const netKey = config.network.toLowerCase();
     const networkInfo = globalConfig.networks[netKey];
     
     if (!networkInfo) {
       throw new Error(`Network info not found for: ${config.network}`);
     }
 
-    const provider = new JsonRpcProvider(networkInfo.rpc);
+    const provider = blockchainProviders[netKey];
+    
+    if (!provider) {
+      throw new Error(`Provider not initialized for network: ${netKey}`);
+    }
     
     // Nonce Manager Cache to prevent concurrent tx nonce collision (Death Loop)
     if (!global.walletNonceCache) global.walletNonceCache = new Map();
@@ -201,7 +213,6 @@ ${rsiIndicator}
     }
 
     const swapper = require('../services/swapper');
-    const [tokenSymbol] = config.tokenPair.split('/');
     const tokenConfig = globalConfig.networks[netKey].tokens.find(t => t.symbol === tokenSymbol);
 
     if (!tokenConfig) {
@@ -218,9 +229,6 @@ ${rsiIndicator}
 
     // 6. Execute Swap
     
-    let txHash;
-    let gasUsed = '0.001';
-
     if (isDryRun) {
       logger.info(`[TradeExecutor] DRY RUN: EXECUTING MOCK ${result.signal} for ${userId} @ ${result.price}`);
       txHash = `DRY_RUN_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
@@ -271,10 +279,29 @@ ${rsiIndicator}
     const networkBase = globalConfig.networks[netKey];
     const explorerUrl = `${networkBase.explorerUrl}/tx/${txHash}`;
     const rsiInfo = config.rsiEnabled ? `📊 RSI: ${result.rsiValue?.toFixed(2)} (Limite: ${result.rsiThreshold})` : '';
-    
+
+    let balanceText = '';
+    try {
+      const balances = await balanceService.getMultiChainBalances(walletData.publicAddress);
+      const currentNet = balances[netKey];
+      if (currentNet) {
+        const stableSymbol = 'USDT'; // Default stable
+        const stableBalance = currentNet.tokens[stableSymbol] || '0.00';
+        const tokenBalance = currentNet.tokens[tokenSymbol] || '0.00';
+        
+        balanceText = `
+📊 <b>Saldos Pós-Trade</b>
+- ${networkBase.nativeSymbol}: ${currentNet.nativeBalance}
+- USDT: ${stableBalance}
+- ${displaySymbol}: ${tokenBalance}`;
+      }
+    } catch (balErr) {
+      logger.warn(`[TradeExecutor] Failed to fetch post-trade balances: ${balErr.message}`);
+    }
+
     const notificationText = isDryRun
-      ? `🧪 <b>SIMULAÇÃO CONCLUÍDA</b>
-Par: <code>${config.tokenPair}</code>
+      ? `🧪 <b>SIMULAÇÃO CONCLUÍDA [Rede: ${netLabel}]</b>
+Par: <code>${displaySymbol}/USDT</code>
 Bomba disparada virtualmente.
 
 💰 Preço: ${result.price.toFixed(6)}
@@ -282,16 +309,17 @@ Bomba disparada virtualmente.
 ${rsiInfo}
 
 <i>Efeito surpresa testado com sucesso.</i>`
-      : `✅ <b>DETONAÇÃO REALIZADA!</b>
-Par: <code>${config.tokenPair}</code>
+      : `✅ <b>DETONAÇÃO REALIZADA! [Rede: ${netLabel}]</b>
+Par: <b>${displaySymbol}/USDT</b>
 Tipo: <b>${result.signal}</b>
 
 💰 Preço: ${result.price.toFixed(6)}
 📉 Baliza MA: ${result.maRecent?.toFixed(6)}
 ${rsiInfo}
 
-💎 Valor: ${executionAmount} ${tokenSymbol}
-⛽ Gás: ${gasUsed} ${networkBase.nativeSymbol}
+💎 Valor: ${executionAmount} ${displaySymbol}
+⛽ Gás: ${parseFloat(gasUsed).toFixed(6)} ${networkBase.nativeSymbol}
+${balanceText}
 🔗 <a href="${explorerUrl}">Ver no Explorer</a>`;
 
     await sendUserNotification(user.telegramId, notificationText, isDryRun ? 'info' : 'success');
@@ -380,7 +408,14 @@ ${rsiInfo}
         });
         
         if (targetTelegramId) {
-          await sendUserNotification(targetTelegramId, `🚨 <b>Falha Crítica no Motor</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>\n\n<i>Auditando logs para auto-recuperação...</i>`, 'error', 'INFO');
+          const netLabel = config?.network?.toUpperCase() || 'BATTLESYSTEM';
+          const isRpcError = errorMsg.includes('OPERAÇÃO CANCELADA') || errorMsg.includes('ENOTFOUND') || errorMsg.includes('Unauthorized');
+          
+          const displayError = isRpcError 
+            ? `🔴 <b>OPERAÇÃO CANCELADA</b>\nFalha massiva de comunicação com a Blockchain (RPC Down).`
+            : `🚨 <b>FALHA NO MOTOR [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>`;
+
+          await sendUserNotification(targetTelegramId, `${displayError}\n\n<i>Auditando logs para auto-recuperação...</i>`, 'error', 'INFO');
         }
       } catch (dbErr) {
         logger.error(`[TradeExecutor] Could not log failure: ${dbErr.message}`);
@@ -388,7 +423,8 @@ ${rsiInfo}
     }
 
     // Pause on specific errors like balance
-    if (errorMsg.includes('gas') || errorMsg.includes('insufficient')) {
+    const isBalanceError = errorMsg.toLowerCase().includes('insufficient funds') || errorMsg.toLowerCase().includes('gas');
+    if (isBalanceError) {
       await prisma.tradeConfig.update({
         where: { id: tradeConfigId },
         data: { isOperating: false }
