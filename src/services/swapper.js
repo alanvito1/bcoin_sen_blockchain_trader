@@ -173,10 +173,20 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       }
     }
 
-    // --- 2. FINAL PATH FINDING ---
+    // --- 2. FINAL PATH FINDING (Smart Pool Analysis) ---
     const bridges = networkName === 'polygon' 
-      ? [network.usdt, '0x7ceB23fD6bC0ad59E62c2551523066Ab99653907', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'] 
-      : [network.usdt, '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d'];
+      ? [
+          network.usdt, 
+          '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC (PoS)
+          '0x8f3Cf7ad107F03473D6612c2e12831115f7e8f3d', // DAI
+          '0x7ceB23fD6bC0ad59E62c2551523066Ab99653907'  // WETH
+        ] 
+      : [
+          network.usdt,
+          '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', // USDC
+          '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3', // DAI
+          '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56'  // BUSD
+        ];
     const routingBridges = [network.wrappedNative, ...bridges.filter(b => b && b.toLowerCase() !== tokenIn.toLowerCase() && b.toLowerCase() !== tokenOut.toLowerCase())];
     
     const path = await getBestPath(routerContract, amountIn, tokenIn, tokenOut, routingBridges, 'out');
@@ -226,11 +236,21 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     const baseOptions = {};
     if (isNativeIn) baseOptions.value = amountIn;
 
+    const priorityMode = tokenConfig.priorityMode || 'Standard';
+    
     if (networkName === 'polygon') {
       const gas = await explorer.getPolygonGasPrice();
       if (gas) {
-        baseOptions.maxPriorityFeePerGas = ethers.parseUnits(gas.maxPriorityFee.toString(), 'gwei') * 120n / 100n;
-        baseOptions.maxFeePerGas = ethers.parseUnits(gas.maxFee.toString(), 'gwei') + baseOptions.maxPriorityFeePerGas;
+        // Multiplier based on priorityMode
+        const multiplier = priorityMode === 'Aggressive' ? 150n : 110n;
+        baseOptions.maxPriorityFeePerGas = (ethers.parseUnits(gas.maxPriorityFee.toString(), 'gwei') * multiplier) / 100n;
+        baseOptions.maxFeePerGas = (ethers.parseUnits(gas.maxFee.toString(), 'gwei') * multiplier) / 100n;
+      }
+    } else if (networkName === 'bsc') {
+      const standardGas = await blockchainProviders[networkName].getFeeData();
+      if (standardGas.gasPrice) {
+        const multiplier = priorityMode === 'Aggressive' ? 150n : 110n;
+        baseOptions.gasPrice = (standardGas.gasPrice * multiplier) / 100n;
       }
     }
 

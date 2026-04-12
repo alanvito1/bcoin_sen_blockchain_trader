@@ -232,7 +232,8 @@ ${rsiIndicator}
       ...tokenConfig, 
       antiSandwich: !!config.antiSandwichEnabled,
       slippage: config.slippage,
-      isDryRun: isDryRun
+      isDryRun: isDryRun,
+      priorityMode: config.priorityMode || 'Standard'
     };
 
     // 6. Execute Swap
