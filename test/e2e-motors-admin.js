@@ -44,14 +44,14 @@ async function validationE2E() {
             buyAmountA: 0.1,
             sellAmountA: 0.1,
             isOperating: true,
-            dryRun: true // FORCE DRY RUN FOR SAFETY
+            dryRun: false // LIVE MODE!
           }
         });
         console.log(`   [NEW] Configuração criada (ID: ${config.id})`);
       } else {
         config = await prisma.tradeConfig.update({
           where: { id: config.id },
-          data: { isOperating: true, dryRun: true }
+          data: { isOperating: true, dryRun: false } // LIVE MODE!
         });
         console.log(`   [UPD] Configuração ativada (ID: ${config.id})`);
       }
