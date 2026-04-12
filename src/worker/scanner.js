@@ -43,8 +43,6 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       
       // Gate A: Credits/Subscription (Bypass for ADMIN)
       const isSubscribed = user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
-      // Gate A: Credits/Subscription (Bypass for ADMIN)
-      const isSubscribed = user.subscriptionExpiresAt && user.subscriptionExpiresAt > now;
       const possessesCredits = user.credits > 0;
       const isAdmin = adminTelegramId && user.telegramId === adminTelegramId;
       
