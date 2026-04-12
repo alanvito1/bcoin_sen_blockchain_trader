@@ -25,18 +25,20 @@ function createBulletproofProvider(networkKey) {
       if (typeof originalValue === 'function') {
         return async (...args) => {
           let lastError;
-          for (const provider of providers) {
+          for (let i = 0; i < providers.length; i++) {
+            const provider = providers[i];
             try {
               return await provider[prop].apply(provider, args);
             } catch (err) {
               lastError = err;
-              const rpcUrl = provider._getAddress ? provider._getAddress() : 'unknown-node';
-              logger.warn(`[Blockchain] ⚠️ RPC Node Failed (${rpcUrl}): ${err.message}. Tentando próximo...`);
+              const rpcUrl = provider._getAddress ? provider._getAddress() : `node-${i}`;
+              // Silent failover: Log internally but don't propagate to application layer until all nodes fail
+              logger.warn(`[Blockchain] ⚠️ RPC Node Failover (${rpcUrl}) network=${networkKey.toUpperCase()}: ${err.message}`);
               continue;
             }
           }
           
-          // Se todos falharem, formatamos a mensagem amigável solicitada pelo Founder
+          // Only throw if EVERY node in the list has failed
           const friendlyError = new Error(`🔴 OPERAÇÃO CANCELADA: Falha massiva de comunicação com a Blockchain (RPC Down na rede ${networkKey.toUpperCase()})`);
           friendlyError.originalError = lastError;
           throw friendlyError;

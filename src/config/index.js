@@ -74,7 +74,7 @@ module.exports = {
     polygon: {
       chainId: 137,
       nativeSymbol: 'POL',
-      rpc: process.env.POLYGON_RPC || 'https://polygon-rpc.com,https://polygon-mainnet.public.blastapi.io,https://polygon-bor-rpc.publicnode.com',
+      rpc: process.env.POLYGON_RPC || 'https://polygon-rpc.com,https://polygon-bor-rpc.publicnode.com,https://polygon.llamarpc.com',
       router: '0xa5e0829caced8ffdd4de3c43696c57f7d7a678ff',
       wrappedNative: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
       usdt: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
