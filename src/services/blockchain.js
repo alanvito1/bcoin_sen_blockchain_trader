@@ -64,6 +64,9 @@ class BulletproofProvider {
   on(...args) { return this.providers[0].on(...args); }
   once(...args) { return this.providers[0].once(...args); }
   emit(...args) { return this.providers[0].emit(...args); }
+  off(...args) { return this.providers[0].off(...args); }
+  removeListener(...args) { return this.providers[0].removeListener(...args); }
+  waitForTransaction(...args) { return this._execute('waitForTransaction', args); }
 }
 
 const providers = {
