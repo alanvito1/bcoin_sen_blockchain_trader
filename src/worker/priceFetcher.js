@@ -25,27 +25,53 @@ const TOKEN_CONFIG = [
 /**
  * Fetches price from DexScreener (Best fallback for DEX tokens)
  */
+/**
+ * Fetches price using a robust fallback mechanism (DexScreener -> GeckoTerminal)
+ */
 async function fetchPrice(token) {
-  const url = `https://api.dexscreener.com/latest/dex/tokens/${token.address}`;
+  const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${token.address}`;
   
   try {
-    const res = await axios.get(url, { timeout: 10000 });
-    
-    // DexScreener returns an array of pairs. We find the one with the highest liquidity or the one on the correct network.
+    // 1. Primary: DexScreener
+    const res = await axios.get(dexUrl, { timeout: 10000 });
     const pairs = res.data.pairs || [];
-    if (pairs.length === 0) throw new Error(`No pools found for ${token.symbol} on ${token.network}`);
-
-    // Filter by network (BSC/POLYGON)
+    
     const netMatch = token.network.toLowerCase() === 'bsc' ? 'bsc' : 'polygon';
     const bestPair = pairs
       .filter(p => p.chainId === netMatch)
       .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
 
-    if (!bestPair) throw new Error(`No ${token.network} pair found for ${token.symbol}`);
+    if (bestPair && bestPair.priceUsd) {
+      const price = parseFloat(bestPair.priceUsd);
+      await saveTick(token, price);
+      return price;
+    }
 
-    const price = parseFloat(bestPair.priceUsd);
-    if (isNaN(price)) throw new Error(`Invalid price for ${token.symbol}`);
+    throw new Error('DexScreener pair not found');
+  } catch (error) {
+    logger.warn(`[PriceFetcher] ⚠️ DexScreener failed for ${token.symbol}: ${error.message}. Trying Backup...`);
+    
+    try {
+      // 2. Fallback: GeckoTerminal
+      const geckoNetwork = token.network.toLowerCase() === 'bsc' ? 'bsc' : 'polygon_pos';
+      const geckoUrl = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/tokens/${token.address}`;
+      
+      const gRes = await axios.get(geckoUrl, { timeout: 10000 });
+      const price = parseFloat(gRes.data.data.attributes.price_usd);
+      
+      if (price > 0) {
+        await saveTick(token, price);
+        return price;
+      }
+    } catch (gError) {
+      logger.error(`[PriceFetcher] ❌ All Oracles FAILED for ${token.symbol}: ${gError.message}`);
+    }
+    return null;
+  }
+}
 
+async function saveTick(token, price) {
+  try {
     await prisma.priceTick.create({
       data: {
         symbol: token.symbol,
@@ -54,11 +80,8 @@ async function fetchPrice(token) {
         timestamp: new Date()
       }
     });
-
-    return price;
-  } catch (error) {
-    logger.error(`[PriceFetcher] ❌ Error fetching ${token.symbol} on ${token.network}: ${error.message}`);
-    return null;
+  } catch (e) {
+    logger.error(`[PriceFetcher] Failed to save tick: ${e.message}`);
   }
 }
 

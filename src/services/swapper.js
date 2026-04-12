@@ -207,14 +207,14 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       if (balance < amountIn) throw new Error(`Saldo nativo insuficiente.`);
     }
 
-    // --- 4. SLIPPAGE & EXECUTION ---
+    // --- 4. SLIPPAGE & SIMULATION (MetaMask Pattern) ---
     let amountOutMin = (expectedOut * (10000n - BigInt(Math.floor((tokenConfig.slippage || globalConfig.slippage || 1.0) * 100)))) / 10000n;
     
     if (marketPrice) {
       const amountInNum = parseFloat(ethers.formatUnits(amountIn, inDecimals));
       const fairOutNum = direction === 'buy' ? amountInNum / marketPrice : amountInNum * marketPrice;
       const fairOut = ethers.parseUnits(fairOutNum.toFixed(outDecimals), outDecimals);
-      amountOutMin = (fairOut * (10000n - 1000n)) / 10000n; // Use 10% tolerance from global market price
+      amountOutMin = (fairOut * (10000n - 1000n)) / 10000n; // 10% safety buffer
     }
 
     if (tokenConfig.isDryRun) {
@@ -223,27 +223,66 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     }
 
     const deadline = Math.floor(Date.now() / 1000) + 1200;
-    const options = { gasLimit: 350000 };
-    if (isNativeIn) options.value = amountIn;
+    const baseOptions = {};
+    if (isNativeIn) baseOptions.value = amountIn;
 
     if (networkName === 'polygon') {
       const gas = await explorer.getPolygonGasPrice();
       if (gas) {
-        options.maxPriorityFeePerGas = ethers.parseUnits(gas.maxPriorityFee.toString(), 'gwei') * 120n / 100n;
-        options.maxFeePerGas = ethers.parseUnits(gas.maxFee.toString(), 'gwei') + options.maxPriorityFeePerGas;
+        baseOptions.maxPriorityFeePerGas = ethers.parseUnits(gas.maxPriorityFee.toString(), 'gwei') * 120n / 100n;
+        baseOptions.maxFeePerGas = ethers.parseUnits(gas.maxFee.toString(), 'gwei') + baseOptions.maxPriorityFeePerGas;
       }
     }
 
-    let tx;
-    if (isNativeIn) {
-      tx = await routerContract.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, wallet.address, deadline, options);
-    } else if (isNativeOut) {
-      tx = await routerContract.swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, options);
-    } else {
-      tx = await routerContract.swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, options);
+    // SIMULATION GATE (MetaMask Pattern)
+    logger.step(`[${networkName}] Simulando transação (MetaMask Pattern)...`);
+    let gasLimit;
+    try {
+      const estimate = async (p = path) => {
+        if (isNativeIn) return routerContract.swapExactETHForTokensSupportingFeeOnTransferTokens.estimateGas(amountOutMin, p, wallet.address, deadline, baseOptions);
+        if (isNativeOut) return routerContract.swapExactTokensForETHSupportingFeeOnTransferTokens.estimateGas(amountIn, amountOutMin, p, wallet.address, deadline, baseOptions);
+        return routerContract.swapExactTokensForTokensSupportingFeeOnTransferTokens.estimateGas(amountIn, amountOutMin, p, wallet.address, deadline, baseOptions);
+      };
+
+      try {
+        const estimated = await withRPCRetry(() => estimate(), networkName);
+        gasLimit = (estimated * 120n) / 100n; // 20% Buffer
+        logger.info(`[${networkName}] ✅ Simulação Sucesso (Rota Direta). Gás Estimado (+20%): ${gasLimit.toString()}`);
+      } catch (simError) {
+        logger.warn(`[${networkName}] ⚠️ Simulação FALHOU na Rota Direita: ${simError.message}`);
+        
+        // Fallback to Triangular Route if available and not already used
+        if (path.length === 2 && routingBridges.length > 0) {
+            logger.step(`[${networkName}] 🔄 Tentando Fallback para Rota Triangular via Simulação...`);
+            const altPath = await getBestPath(routerContract, amountIn, tokenIn, tokenOut, routingBridges.filter(b => b.toLowerCase() !== network.wrappedNative.toLowerCase()), 'out');
+            
+            if (altPath && altPath.length > 2) {
+                const altEstimated = await withRPCRetry(() => estimate(altPath), networkName);
+                gasLimit = (altEstimated * 120n) / 100n;
+                path.splice(0, path.length, ...altPath); // Update path in-place
+                logger.info(`[${networkName}] ✅ Simulação Sucesso (Rota Triangular). Gás Estimado: ${gasLimit.toString()}`);
+            } else {
+                throw simError;
+            }
+        } else {
+            throw simError;
+        }
+      }
+    } catch (finalSimError) {
+      throw new Error(`[SIMULATION_FAILED] A transação falharia na Blockchain: ${finalSimError.message}`);
     }
 
-    logger.info(`[${networkName}] 🔄 Tx Broadcasted: ${tx.hash}`);
+    const txOptions = { ...baseOptions, gasLimit };
+    let tx;
+    if (isNativeIn) {
+      tx = await routerContract.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, wallet.address, deadline, txOptions);
+    } else if (isNativeOut) {
+      tx = await routerContract.swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, txOptions);
+    } else {
+      tx = await routerContract.swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, txOptions);
+    }
+
+    logger.info(`[${networkName}] 🔄 Tx Broadcasted (MetaMask Standard): ${tx.hash}`);
     const receipt = await withRPCRetry(() => tx.wait(1), networkName, 5, 4000);
     
     if (receipt.status === 1) {

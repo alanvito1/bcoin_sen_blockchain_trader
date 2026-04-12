@@ -36,38 +36,50 @@ try {
   process.exit(1);
 }
 
-// Start Workers
-try {
-  console.log('🚀 [System] Initializing Workers...');
-  
-  console.log('  - Scanner...');
-  const scanner = require('./src/worker/scanner');
-  
-  console.log('  - Trade Executor...');
-  const tradeExecutor = require('./src/worker/tradeExecutor');
-  
-  console.log('  - Billing Cron...');
-  const billingCron = require('./src/worker/billingCron');
-  
-  console.log('  - Notifications...');
-  const { notificationWorker } = require('./src/worker/notificationWorker');
-  
-  console.log('  - Price Fetcher...');
-  const priceFetcher = require('./src/worker/priceFetcher');
+// Start Workers (STAGGERED START - Resiliência DNS/RPC)
+async function bootstrap() {
+  try {
+    console.log('🚀 [System] Initializing Workers (Staggered Mode)...');
+    
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  console.log('  - Payout Splitter...');
-  const { payoutWorker } = require('./src/worker/payoutWorker');
+    console.log('  [1/7] - Price Fetcher (Oracle Seed)...');
+    require('./src/worker/priceFetcher');
+    await delay(3000); // Give time for first price pull
+    
+    console.log('  [2/7] - Trade Executor...');
+    require('./src/worker/tradeExecutor');
+    await delay(1000);
+    
+    console.log('  [3/7] - Scanner (Tactical Gatling)...');
+    require('./src/worker/scanner');
+    await delay(1000);
+    
+    console.log('  [4/7] - Billing Cron...');
+    require('./src/worker/billingCron');
+    await delay(1000);
+    
+    console.log('  [5/7] - Notifications...');
+    require('./src/worker/notificationWorker');
+    await delay(1000);
 
-  console.log('  - Transit Monitor...');
-  const { checkTransitIntegrity } = require('./src/worker/monitorWorker');
+    console.log('  [6/7] - Payout Splitter...');
+    require('./src/worker/payoutWorker');
+    await delay(1000);
 
-  console.log('✅ [System] All Workers Initialized.');
-} catch (workerErr) {
-  console.error('💥 [FATAL] Worker Initialization Failed:');
-  console.error('Message:', workerErr.message);
-  console.error('Stack:', workerErr.stack);
-  process.exit(1);
+    console.log('  [7/7] - Transit Monitor...');
+    require('./src/worker/monitorWorker');
+
+    console.log('✅ [System] All Workers Initialized and Synchronized.');
+  } catch (workerErr) {
+    console.error('💥 [FATAL] Worker Initialization Failed:');
+    console.error('Message:', workerErr.message);
+    console.error('Stack:', workerErr.stack);
+    process.exit(1);
+  }
 }
+
+bootstrap();
 
 // Basic Health Check
 setInterval(async () => {
