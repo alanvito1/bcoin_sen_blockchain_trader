@@ -78,6 +78,14 @@ function calculateRSI(candles, period) {
  * @param {number} [limit=100] - Number of candles to retrieve.
  * @returns {Promise<Array<Object>>} Normalized candle array [{close, time}].
  */
+/**
+ * Fetches OHLCV data from local Database (PriceTick).
+ * Consumes 0 API credits.
+ * @param {string} symbol - Token pair symbol (e.g., 'BCOIN/USDT').
+ * @param {string} interval - Desired timeframe (5m, 15m, 30m, 1h, 4h).
+ * @param {number} [limit=50] - Number of candles to retrieve.
+ * @returns {Promise<Array<Object>>} Normalized candle array [{close, time}].
+ */
 async function fetchCandles(symbol, interval, limit = 50) {
     const tokenPair = symbol.includes('/') ? symbol : (symbol === 'BCOINUSDT' ? 'BCOIN/USDT' : (symbol === 'SENUSDT' ? 'SEN/USDT' : symbol));
     const network = symbol.includes('SEN') ? 'POLYGON' : 'BSC'; 
@@ -87,14 +95,16 @@ async function fetchCandles(symbol, interval, limit = 50) {
         const minutesNeeded = tf.geckoTf === 'hour' ? tf.aggregate * 60 : tf.aggregate;
         const totalTicksNeeded = minutesNeeded * limit;
         
+        // Graceful Degradation: Fetch as much as possible, up to the limit
         const ticks = await prisma.priceTick.findMany({
             where: { symbol: tokenPair, network },
             orderBy: { timestamp: 'desc' },
             take: totalTicksNeeded
         });
 
-        if (ticks.length >= totalTicksNeeded) {
+        if (ticks.length > 0) {
             const candles = [];
+            // Aggregate ticks into candles based on minutesNeeded
             for (let i = 0; i < ticks.length; i += minutesNeeded) {
                 const group = ticks.slice(i, i + minutesNeeded);
                 if (group.length > 0) {
@@ -105,26 +115,24 @@ async function fetchCandles(symbol, interval, limit = 50) {
                 }
             }
 
-            const latestTick = ticks[0].timestamp;
-            const threshold = Math.max(1000 * 60 * 10, 1000 * 60 * minutesNeeded * 2);
-            
-                if ((Date.now() - latestTick.getTime()) < threshold) {
-                    logger.info(`[Strategy] ${symbol} | Using Cache (${candles.length} candles from ${ticks.length} ticks)`);
-                    return candles.reverse().slice(-limit);
-                }
+            // Return whatever we built (Partial history is better than HOLD)
+            return candles.reverse().slice(-limit);
         }
         
-        logger.warn(`[Strategy] ${symbol} | DB Data stale or insufficient (${ticks.length}/${totalTicksNeeded} ticks). HOLD advised.`);
+        logger.warn(`[Strategy] ${symbol} | No data found in DB for ${interval}.`);
     } catch (dbErr) {
         logger.error(`[Strategy] CRITICAL: DB Error fetching ticks: ${dbErr.message}`);
     }
 
-    return []; // Return empty if no data, logic will HOLD.
+    return [];
 }
 
 /**
- * Analyzes market data and returns a BUY, SELL, or HOLD signal.
- * Logic: Crosses below/above MA with RSI confirmation if enabled.
+ * Analyzes market data and returns a BUY, SELL, or HOLD signal (Grid Accumulator Mode).
+ * Logic: 
+ *  - Price < MA = BUY (Immediate Accumulation)
+ *  - Price > MA = SELL (Immediate Profit taking)
+ *  - RSI acts as a strict VETO if enabled.
  * @param {string} tokenPair - The pair to analyze (e.g., 'BCOIN/USDT').
  * @param {Object} tradeConfig - User's trade configuration from database.
  * @returns {Promise<Object>} Signal result {signal, reason, price, strategyUsed}.
@@ -137,7 +145,7 @@ async function getSignal(tokenPair, tradeConfig) {
       return { 
         signal: tradeConfig.forceSignal, 
         reason: 'Manual Engine Trigger (QA Force Signal)', 
-        price: 0, // Will be fetched by executor/swapper if needed
+        price: 0, 
         strategyUsed: 'FORCE' 
       };
     }
@@ -146,7 +154,6 @@ async function getSignal(tokenPair, tradeConfig) {
     const sA = config.strategy.strategyA;
     const sB = config.strategy.strategyB;
 
-    // Use User Config if available, fallback to Global Config
     const tfA = tradeConfig?.timeframeA || sA.timeframe.toString();
     const tfB = tradeConfig?.timeframeB || sB.timeframe.toString();
     const maPeriodA = tradeConfig?.maPeriodA || sA.maPeriod;
@@ -157,41 +164,57 @@ async function getSignal(tokenPair, tradeConfig) {
       fetchCandles(symbol, tfB)
     ]);
 
-    logger.info(`[Strategy] ${tokenPair} | Calibration: MA(${tfA}:${maPeriodA}), MA(${tfB}:${maPeriodB}), RSI:${tradeConfig?.rsiEnabled ? tradeConfig.rsiPeriod : 'OFF'}`);
-
-    if (!candlesA || candlesA.length < 2) {
-      return { signal: 'HOLD', reason: 'Dados insuficientes no banco local. Aguardando sincronização de preços.' };
+    if (!candlesA || candlesA.length === 0) {
+      return { signal: 'HOLD', reason: 'Aguardando população de dados históricos (Oracle Starvation).' };
     }
 
     const lastPrice = candlesA[candlesA.length - 1].close;
-    const prevPrice = candlesA[candlesA.length - 2].close;
-
     const maA = calculateMA(candlesA, maPeriodA);
     const maB = calculateMA(candlesB, maPeriodB);
-    const rsiValue = tradeConfig?.rsiEnabled ? calculateRSI(candlesA, tradeConfig.rsiPeriod) : null;
+    const rsiValue = tradeConfig?.rsiEnabled ? calculateRSI(candlesA, tradeConfig.rsiPeriod || 14) : null;
 
-    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(${tfA}): ${maA?.toFixed(6)} | 📈 MA(${tfB}): ${maB?.toFixed(6)} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'DISABLED'}`);
+    logger.info(`[Strategy] ${tokenPair} | 💰 Preço: ${lastPrice.toFixed(6)} | 📉 MA(${tfA}): ${maA ? maA.toFixed(6) : 'N/A'} | 📈 MA(${tfB}): ${maB ? maB.toFixed(6) : 'N/A'} | 📊 RSI: ${rsiValue ? rsiValue.toFixed(2) : 'OFF'}`);
 
     let signal = 'HOLD';
-    let reason = 'Análise técnica concluída: Sem sinal claro de compra/venda.';
+    let reason = 'Preço em equilíbrio com a baliza (MA).';
     let strategyUsed = null;
 
+    // Filter B: Higher Trend Up (Optional Veto)
     const trendUp = (maB !== null) ? (lastPrice > maB) : true;
 
-    if (maA !== null && prevPrice >= maA && lastPrice < maA) {
-      const rsiConfirm = !tradeConfig?.rsiEnabled || rsiValue < 30;
-      if (tradeConfig?.strategy30m && (!tradeConfig?.strategy4h || trendUp) && rsiConfirm) {
-        signal = 'BUY';
-        reason = `Cruzou ABAIXO da MA${maPeriodA} (Fundo). Tendência de Alta em ${tfB} Confirmada.`;
-        strategyUsed = 'A';
+    // Grid Logic Implementation
+    if (maA !== null) {
+      if (lastPrice < maA) {
+        // Condition: Price below Pivot (BUY Opportunity)
+        // RSI Veto: If RSI enabled, it MUST be below 40 (Oversold/Cheap enough)
+        const rsiConfirm = !tradeConfig?.rsiEnabled || (rsiValue !== null && rsiValue < 40);
+        
+        if (tradeConfig?.strategy30m && (!tradeConfig?.strategy4h || trendUp)) {
+          if (rsiConfirm) {
+            signal = 'BUY';
+            reason = `Grid Accumulator: Preço (${lastPrice.toFixed(6)}) abaixo da Baliza MA${maPeriodA} (${maA.toFixed(6)}).`;
+            strategyUsed = 'A';
+          } else {
+            reason = `HOLD: Preço < MA (Compra), mas RSI (${rsiValue?.toFixed(2)}) desautoriza a entrada.`;
+          }
+        }
+      } else if (lastPrice > maA) {
+        // Condition: Price above Pivot (SELL Opportunity)
+        // RSI Veto: If RSI enabled, it MUST be above 60 (Overbought/Expensive enough)
+        const rsiConfirm = !tradeConfig?.rsiEnabled || (rsiValue !== null && rsiValue > 60);
+        
+        if (tradeConfig?.strategy30m) {
+          if (rsiConfirm) {
+            signal = 'SELL';
+            reason = `Grid Distribution: Preço (${lastPrice.toFixed(6)}) acima da Baliza MA${maPeriodA} (${maA.toFixed(6)}).`;
+            strategyUsed = 'A';
+          } else {
+            reason = `HOLD: Preço > MA (Venda), mas RSI (${rsiValue?.toFixed(2)}) desautoriza a saída.`;
+          }
+        }
       }
-    } else if (maA !== null && prevPrice <= maA && lastPrice > maA) {
-      const rsiConfirm = !tradeConfig?.rsiEnabled || rsiValue > 70;
-      if (tradeConfig?.strategy30m && rsiConfirm) {
-        signal = 'SELL';
-        reason = `Cruzou ACIMA da MA${maPeriodA} (Topo). Realizando Lucro.`;
-        strategyUsed = 'A';
-      }
+    } else {
+      reason = 'Aguardando amostras suficientes para calcular a baliza (MA).';
     }
 
     return { signal, reason, price: lastPrice, strategyUsed };

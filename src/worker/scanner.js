@@ -94,10 +94,14 @@ const scannerTask = cron.schedule('* * * * *', async () => {
           const windowSize = (windowMax - windowMin) + 1;
           const targetMinute = windowMin + (seed % windowSize);
 
-          isScheduled = currentMinute === targetMinute;
+          // If strategy returns HOLD, config.lastOperationWindow will NOT be updated.
+          // This allows the scanner to retry every minute until the window closes or a trade fires.
+          isScheduled = currentMinute >= targetMinute;
 
           if (!isScheduled) {
             logger.debug(`[Scanner] ${user.telegramId} [${config.network}] Waiting for target minute ${targetMinute} (Current: ${currentMinute})`);
+          } else {
+            logger.info(`[Scanner] ${user.telegramId} [${config.network}] Window ${currentWindow} active. Target ${targetMinute} reached. Attempting trade...`);
           }
         }
       }

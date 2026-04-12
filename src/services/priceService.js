@@ -1,10 +1,11 @@
 const axios = require('axios');
+const prisma = require('../config/prisma');
 const config = require('../config');
 const logger = require('../utils/logger');
 
 const cache = {
   data: {},
-  TTL: 30000 // 30 seconds
+  TTL: 30000 // 30 seconds local in-memory TTL
 };
 
 /**
@@ -21,7 +22,7 @@ async function fetchPrice(url) {
 }
 
 /**
- * Fetches the current USD price of a token using GeckoTerminal API
+ * Fetches the current USD price of a token using Local Oracle (DB) or fallback GeckoTerminal
  * @param {string} network - 'BSC' or 'POLYGON'
  * @param {string} symbol - 'BCOIN' or 'SEN'
  */
@@ -29,18 +30,32 @@ async function getTokenPrice(network, symbol) {
   const cacheKey = `${network}_${symbol}`.toLowerCase();
   const now = Date.now();
 
-  // 1. Return Cache if valid
-  if (cache.data[cacheKey] && (now - cache.data[cacheKey].timestamp < cache.TTL)) {
-    return cache.data[cacheKey].price;
-  }
-
-  // 2. Mock USDT (Pegged)
+  // 1. Return USDT if requested
   if (symbol.toUpperCase() === 'USDT') return 1.0;
 
+  // 2. Check Local Oracle (Prisma) first - 60-120s Freshness
+  try {
+    const latestTick = await prisma.priceTick.findFirst({
+      where: {
+        symbol: symbol.toUpperCase() + '/USDT',
+        network: network.toUpperCase()
+      },
+      orderBy: { timestamp: 'desc' }
+    });
+
+    if (latestTick && (now - new Date(latestTick.timestamp).getTime() < 120000)) {
+      // logger.info(`[PriceService] Using Local Oracle for ${symbol} @ $${latestTick.price.toFixed(6)}`);
+      return latestTick.price;
+    }
+  } catch (dbErr) {
+    logger.warn(`[PriceService] Local Oracle Query Failed: ${dbErr.message}`);
+  }
+
+  // 3. Fallback to API Fetch (GeckoTerminal) if DB is stale or missing
   const netConfig = config.networks[network.toLowerCase()];
   if (!netConfig) throw new Error(`Network ${network} not found in config.`);
 
-  const tokenInfo = netConfig.tokens.find(t => t.symbol === symbol);
+  const tokenInfo = netConfig.tokens.find(t => t.symbol === symbol.toUpperCase());
   if (!tokenInfo || !tokenInfo.pool) {
     throw new Error(`Token ${symbol} or its pool not found on ${network}.`);
   }
@@ -52,39 +67,39 @@ async function getTokenPrice(network, symbol) {
   const url = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/pools/${poolAddress}`;
 
   try {
+    logger.info(`[PriceService] 🌐 Fetching live price for ${symbol} (DB stale)...`);
     const response = await fetchPrice(url);
     
     const attributes = response.data.attributes;
-    const baseTokenRef = response.data.relationships.base_token.data.id;
-    
-    // Robust address extraction: GeckoTerminal IDs are formatted as "network_address"
-    // For Polygon POS it's "polygon_pos_0x...", so we take the last part.
-    const baseAddress = baseTokenRef.split('_').pop().toLowerCase();
-    const targetAddress = tokenInfo.address.toLowerCase();
-    
-    const isBaseToken = baseAddress === targetAddress;
-
-    let price;
-    if (isBaseToken) {
-      price = parseFloat(attributes.base_token_price_usd);
-    } else {
-      // If our token is the quote token in this pool
-      price = parseFloat(attributes.quote_token_price_usd);
-    }
+    const price = parseFloat(attributes.base_token_price_usd);
 
     if (!price || isNaN(price)) {
       throw new Error(`Invalid price received for ${symbol}`);
     }
 
-    cache.data[cacheKey] = { price, timestamp: now };
-    logger.info(`[PriceService] Updated price for ${symbol} on ${network}: $${price.toFixed(6)}`);
-    
+    // Update DB with the fresh price too (Self-Correction)
+    await prisma.priceTick.create({
+      data: {
+        symbol: symbol.toUpperCase() + '/USDT',
+        network: network.toUpperCase(),
+        price,
+        timestamp: new Date()
+      }
+    }).catch(() => {});
+
     return price;
   } catch (error) {
-    if (cache.data[cacheKey]) {
-      logger.warn(`[PriceService] API Failed for ${symbol}, using stale cache.`);
-      return cache.data[cacheKey].price;
+    // Last resort: Check if we have ANY stale data in DB
+    const veryStaleTick = await prisma.priceTick.findFirst({
+      where: { symbol: symbol.toUpperCase() + '/USDT', network: network.toUpperCase() },
+      orderBy: { timestamp: 'desc' }
+    });
+    
+    if (veryStaleTick) {
+      logger.warn(`[PriceService] API Failed for ${symbol}, using STALE DB price ($${veryStaleTick.price}).`);
+      return veryStaleTick.price;
     }
+    
     throw new Error(`Não foi possível obter o preço de ${symbol} no momento.`);
   }
 }

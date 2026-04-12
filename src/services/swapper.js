@@ -10,7 +10,6 @@ const config = require('../config');
 const { wallets, mevWallets } = require('./blockchain');
 const explorer = require('../utils/explorer');
 const logger = require('../utils/logger');
-const logger = require('../utils/logger');
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
