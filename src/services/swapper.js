@@ -294,11 +294,14 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     const amountsOut = await withRPCRetry(() => routerContract.getAmountsOut(amountIn, path), networkName);
     const expectedOut = amountsOut[amountsOut.length - 1];
 
+    const inDecimals = isNativeIn ? 18 : (inputTokenOverride ? inputTokenOverride.decimals : 18);
+    const outDecimals = isNativeOut ? 18 : tokenConfig.decimals;
+
     // --- Dynamic Slippage & Anti-Sandwich Intelligence ---
     let amountOutMin;
     if (marketPrice) {
-      const amountInNum = parseFloat(ethers.formatUnits(amountIn, isNativeIn ? 18 : tokenConfig.decimals));
-      const expectedOutNum = parseFloat(ethers.formatUnits(expectedOut, isNativeOut ? 18 : tokenConfig.decimals));
+      const amountInNum = parseFloat(ethers.formatUnits(amountIn, inDecimals));
+      const expectedOutNum = parseFloat(ethers.formatUnits(expectedOut, outDecimals));
       
       let fairOutNum;
       if (direction === 'buy') {
@@ -313,9 +316,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       const dynamicTolerance = Math.max(userSlippage, 10.0); // 10% tolerance for aggressive mode
 
       // Calculate the 'Fair Price Floor' (The minimum we accept based on global market price)
-      const fairOut = direction === 'buy'
-        ? ethers.parseUnits(fairOutNum.toFixed(tokenConfig.decimals), tokenConfig.decimals)
-        : ethers.parseUnits(fairOutNum.toFixed(18), 18);
+      const fairOut = ethers.parseUnits(fairOutNum.toFixed(outDecimals), outDecimals);
       
       amountOutMin = (fairOut * (10000n - BigInt(Math.floor(dynamicTolerance * 100)))) / 10000n;
     } else {
