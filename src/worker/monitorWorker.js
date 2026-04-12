@@ -35,8 +35,12 @@ async function checkTransitIntegrity() {
 
     for (const net of networks) {
       const provider = providers[net];
-      if (!provider) continue;
+      if (!provider) {
+        logger.warn(`[Monitor] Skipping ${net}: Provider not initialized.`);
+        continue;
+      }
 
+      logger.info(`[Monitor] Checking integrity on ${net.toUpperCase()} for ${transitAddress}`);
       const currentNonce = await provider.getTransactionCount(transitAddress);
       const secretKey = `TRANSIT_NONCE_${net.toUpperCase()}`;
 

@@ -207,7 +207,7 @@ ${rsiIndicator}
     const inWindow2 = currentMinute >= (config.window2Min || 0) && currentMinute <= (config.window2Max || 0);
     const windowIndex = inWindow1 ? 1 : (inWindow2 ? 2 : null);
 
-    const isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
+    isDryRun = (process.env.DRY_RUN === 'true') || (config.dryRun === true);
     
     if (isDryRun) {
       logger.info(`[TradeExecutor] DRY RUN ENABLED for user ${userId}. Skipping real balance check.`);
@@ -409,6 +409,7 @@ ${balanceText}
             status: 'FAILED',
             amount: executionAmount || 0,
             price: result?.price || 0,
+            feeUsed: 0,
             errorMessage: errorMsg.slice(0, 255)
           }
         });
