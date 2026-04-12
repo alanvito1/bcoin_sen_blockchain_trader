@@ -34,6 +34,7 @@ async function testFire() {
         tradeConfigId: config.id,
         walletId: user.wallet.id,
         forceSignal: 'BUY',
+        forceAmount: 10,
         isFirstAttempt: true
       }, {
         removeOnComplete: true,
