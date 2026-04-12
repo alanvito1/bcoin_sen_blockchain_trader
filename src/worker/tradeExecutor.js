@@ -421,7 +421,7 @@ ${balanceText}
         
         if (targetTelegramId) {
           const netLabel = config?.network?.toUpperCase() || 'BATTLESYSTEM';
-          const isRpcError = errorMsg.includes('OPERAÇÃO CANCELADA') || errorMsg.includes('ENOTFOUND') || errorMsg.includes('Unauthorized');
+          const isRpcError = errorMsg.includes('OPERAÇÃO CANCELADA') || errorMsg.includes('ENOTFOUND') || errorMsg.includes('Unauthorized') || errorMsg.includes('FALHA MASSIVA') || errorMsg.includes('Comunicação perdida');
           const isLiquidityError = errorMsg.toLowerCase().includes('reverted') || errorMsg.toLowerCase().includes('insufficient liquidity') || errorMsg.toLowerCase().includes('path');
           
           let displayError;
