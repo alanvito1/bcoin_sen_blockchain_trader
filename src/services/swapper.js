@@ -183,8 +183,9 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       const balance = await withRPCRetry(() => inContract.balanceOf(wallet.address), networkName);
       
       if (balance < amountIn) {
-        logger.warn(`[${networkName}] ${inputTokenOverride.symbol} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${amountInFormatted}`);
-        return;
+        const err = `${inputTokenOverride.symbol} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${amountInFormatted}`;
+        logger.warn(`[${networkName}] ${err}`);
+        return { status: 0, error: err };
       }
 
       const allowance = await withRPCRetry(() => inContract.allowance(wallet.address, network.router), networkName);
@@ -207,8 +208,9 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
       const balance = await withRPCRetry(() => tokenContract.balanceOf(wallet.address), networkName);
       if (balance < amountIn) {
-        logger.warn(`[${networkName}] ${tokenConfig.symbol} saldo insuficiente: ${ethers.formatUnits(balance, decimals)} < ${amountInFormatted}`);
-        return;
+        const err = `${tokenConfig.symbol} saldo insuficiente: ${ethers.formatUnits(balance, decimals)} < ${amountInFormatted}`;
+        logger.warn(`[${networkName}] ${err}`);
+        return { status: 0, error: err };
       }
 
       const allowance = await withRPCRetry(() => tokenContract.allowance(wallet.address, network.router), networkName);
@@ -236,8 +238,9 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
       const balance = await withRPCRetry(() => wallet.provider.getBalance(wallet.address), networkName);
       if (balance < amountIn) {
-        logger.warn(`[${networkName}] Saldo nativo insuficiente: ${ethers.formatEther(balance)} < ${amountInFormatted}`);
-        return;
+        const err = `Saldo nativo insuficiente: ${ethers.formatEther(balance)} < ${amountInFormatted}`;
+        logger.warn(`[${networkName}] ${err}`);
+        return { status: 0, error: err };
       }
     }
 
@@ -258,8 +261,9 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     }
     
     if (!path) {
-      logger.error(`[${networkName}] Nenhuma rota líquida para ${tokenConfig.symbol}.`);
-      return;
+      const err = `Nenhuma rota líquida para ${tokenConfig.symbol}.`;
+      logger.error(`[${networkName}] ${err}`);
+      return { status: 0, error: err };
     }
     
     const amountsOut = await withRPCRetry(() => routerContract.getAmountsOut(amountIn, path), networkName);

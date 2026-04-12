@@ -255,8 +255,9 @@ ${rsiIndicator}
           wallet
       );
 
-      if (swapResult.status === 0) {
-          throw new Error(`Transaction failed: ${swapResult.error || 'Blockchain Reverted'}`);
+      if (!swapResult || swapResult.status === 0) {
+          const errorMsg = swapResult ? (swapResult.error || 'Blockchain Reverted') : 'Swap service returned no result (check liquidity/balance)';
+          throw new Error(`Transaction failed: ${errorMsg}`);
       }
       txHash = swapResult.hash;
       gasUsed = swapResult.gasFormatted || '0.001';
