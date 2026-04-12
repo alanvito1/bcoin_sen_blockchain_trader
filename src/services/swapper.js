@@ -194,20 +194,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       amountInFormatted = ethers.formatUnits(amountIn, inDecimals);
       
       const inContract = new ethers.Contract(tokenIn, ERC20_ABI, wallet);
-      const balance = await withRPCRetry(() => inContract.balanceOf(wallet.address), networkName);
-      
-      if (balance < amountIn) {
-        const err = `${inputTokenOverride.symbol} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${amountInFormatted}`;
-        logger.warn(`[${networkName}] ${err}`);
-        return { status: 0, error: err };
-      }
-
-      const allowance = await withRPCRetry(() => inContract.allowance(wallet.address, network.router), networkName);
-      if (allowance < amountIn) {
-        logger.step(`[${networkName}] Aprovando ${inputTokenOverride.symbol} para o Router...`);
-        const approveTx = await withRPCRetry(() => inContract.approve(network.router, ethers.MaxUint256), networkName);
-        await withRPCRetry(() => approveTx.wait(), networkName, 10, 3000);
-      }
+      // Balance and allowance checks moved after estimation logic
     } else if (direction === 'sell') {
       tokenIn = tokenConfig.address;
       tokenOut = inputTokenOverride ? inputTokenOverride.address : network.wrappedNative;
@@ -283,6 +270,25 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     // Ensure wrappedNative is prioritized for liquidity
     const routingBridges = [network.wrappedNative, ...validBridges.filter(b => b.toLowerCase() !== network.wrappedNative.toLowerCase())];
     const path = await getBestPath(routerContract, amountIn, tokenIn, tokenOut, routingBridges);
+    
+    // Final check for token-to-token balance/allowance after path and amountIn are finalized
+    if (inputTokenOverride) {
+      const inDecimals = inputTokenOverride.decimals || 18;
+      const inContract = new ethers.Contract(tokenIn, ERC20_ABI, wallet);
+      const balance = await withRPCRetry(() => inContract.balanceOf(wallet.address), networkName);
+      if (balance < amountIn) {
+        const err = `${inputTokenOverride.symbol} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${ethers.formatUnits(amountIn, inDecimals)}`;
+        logger.warn(`[${networkName}] ${err}`);
+        return { status: 0, error: err };
+      }
+      
+      const allowance = await withRPCRetry(() => inContract.allowance(wallet.address, network.router), networkName);
+      if (allowance < amountIn) {
+        logger.step(`[${networkName}] Aprovando ${inputTokenOverride.symbol} para o Router...`);
+        const approveTx = await withRPCRetry(() => inContract.approve(network.router, ethers.MaxUint256), networkName);
+        await withRPCRetry(() => approveTx.wait(), networkName, 10, 3000);
+      }
+    }
     
     if (path && path.length > 2) {
       logger.info(`[${networkName}] Rota multi-hop detectada: ${path.map(p => p.slice(0, 6)).join(' ➔ ')}`);
