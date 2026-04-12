@@ -196,8 +196,8 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       }
     } else if (direction === 'sell') {
       tokenIn = tokenConfig.address;
-      tokenOut = network.wrappedNative;
-      isNativeOut = true;
+      tokenOut = inputTokenOverride ? inputTokenOverride.address : network.wrappedNative;
+      isNativeOut = !inputTokenOverride;
 
       if (customAmount) {
         amountIn = ethers.parseUnits(customAmount.toString(), decimals);

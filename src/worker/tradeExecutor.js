@@ -244,7 +244,11 @@ ${rsiIndicator}
     } else {
       logger.info(`[TradeExecutor] EXECUTING REAL ${result.signal} for ${userId} @ ${result.price} (Amount: ${executionAmount})`);
       
+      // 6. Execution (The Moment of Truth)
+      const networkBase = globalConfig.networks[netKey];
+      const usdtToken = networkBase.tokens.find(t => t.symbol === 'USDT');
       const direction = result.signal.toLowerCase();
+      
       const swapResult = await swapper.swapToken(
           netKey, 
           tokenConfigWithParams, 
@@ -252,7 +256,8 @@ ${rsiIndicator}
           executionAmount, 
           'token', 
           result.price, 
-          wallet
+          wallet,
+          usdtToken
       );
 
       if (!swapResult || swapResult.status === 0) {
