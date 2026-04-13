@@ -48,8 +48,7 @@ async function fetchPrice(token) {
     }
 
     throw new Error('DexScreener pair not found');
-  } catch (error) {
-    logger.warn(`[PriceFetcher] ⚠️ DexScreener failed for ${token.symbol}: ${error.message}. Trying Backup...`);
+    logger.debug(`[PriceFetcher] ⚠️ DexScreener failed for ${token.symbol}: ${error.message}. Trying Backup...`);
     
     try {
       // 2. Fallback: GeckoTerminal
@@ -64,7 +63,9 @@ async function fetchPrice(token) {
         return price;
       }
     } catch (gError) {
-      logger.error(`[PriceFetcher] ❌ All Oracles FAILED for ${token.symbol}: ${gError.message}`);
+      if (!error.message.includes('404')) {
+          logger.debug(`[PriceFetcher] ❌ All Oracles FAILED for ${token.symbol}: ${gError.message}`);
+      }
     }
     return null;
   }

@@ -82,18 +82,24 @@ const providers = {
   polygon: new BulletproofProvider('polygon')
 };
 
+const mevProviders = {
+  bsc: config.networks.bsc.mevRpc ? new ethers.JsonRpcProvider(config.networks.bsc.mevRpc, 56) : providers.bsc,
+  polygon: config.networks.polygon.mevRpc ? new ethers.JsonRpcProvider(config.networks.polygon.mevRpc, 137) : providers.polygon
+};
+
 const wallets = {
   bsc: config.privateKey ? new ethers.Wallet(config.privateKey, providers.bsc) : null,
   polygon: config.privateKey ? new ethers.Wallet(config.privateKey, providers.polygon) : null
 };
 
 const mevWallets = {
-  bsc: wallets.bsc,
-  polygon: wallets.polygon
+  bsc: config.privateKey ? new ethers.Wallet(config.privateKey, mevProviders.bsc) : wallets.bsc,
+  polygon: config.privateKey ? new ethers.Wallet(config.privateKey, mevProviders.polygon) : wallets.polygon
 };
 
 module.exports = {
   providers,
+  mevProviders,
   wallets,
   mevWallets
 };

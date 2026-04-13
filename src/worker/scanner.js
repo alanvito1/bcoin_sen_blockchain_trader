@@ -49,7 +49,7 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       logger.debug(`[Scanner] ${user.telegramId} Check: isAdmin=${!!isAdmin}, hasCredits=${possessesCredits}, isSubscribed=${!!isSubscribed}`);
 
       if (!isAdmin && !isSubscribed && !possessesCredits) {
-        logger.warn(`[Scanner] User ${user.telegramId} skipped: No credits/subscription.`);
+        logger.debug(`[Scanner] User ${user.telegramId} skipped: No credits/subscription.`);
         return false;
       }
  
@@ -77,7 +77,8 @@ const scannerTask = cron.schedule('* * * * *', async () => {
 
         if (currentWindow) {
           const isSameDay = lastOp && lastOp.toDateString() === now.toDateString();
-          const alreadyDone = isSameDay && config.lastOperationWindow === currentWindow;
+          const isSameHour = lastOp && lastOp.getUTCHours() === now.getUTCHours();
+          const alreadyDone = isSameDay && isSameHour && config.lastOperationWindow === currentWindow;
 
           if (alreadyDone) return false;
 
