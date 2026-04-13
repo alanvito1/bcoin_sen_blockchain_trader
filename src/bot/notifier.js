@@ -23,20 +23,47 @@ async function sendUserNotification(telegramId, message, type = 'info', category
     }
 
     const formattedMessage = formatMessage(message, type);
-    logger.info(`[Notifier] 📨 Sending to ${telegramId}: ${message.slice(0, 50)}...`);
-    await bot.telegram.sendMessage(telegramId, formattedMessage, { parse_mode: 'HTML' });
-    logger.info(`[Notifier] ✅ Sent successfully to ${telegramId}`);
-  } catch (error) {
-    if (error.description && error.description.includes('bot was blocked by the user')) {
-      console.warn(`[Notifier] User ${telegramId} blocked the bot. Updating visibility.`);
-      await prisma.user.update({
-        where: { telegramId: BigInt(telegramId) },
-        data: { isActive: false }
-      });
-    } else {
-        console.error(`[Notifier] Failed to send message to ${telegramId.toString()}. Reason: ${error.message || 'Unknown'}`);
-        if (error.response) console.error(`[Telegram API Error]:`, error.response);
+    
+    // Retry Logic with Exponential Backoff
+    let attempts = 0;
+    const maxAttempts = 3;
+    let success = false;
+
+    while (attempts < maxAttempts && !success) {
+      try {
+        if (attempts > 0) {
+            logger.warn(`[Notifier] 🔄 Tentativa ${attempts + 1}/${maxAttempts} para ${telegramId}...`);
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempts)); // Backoff
+        }
+
+        await bot.telegram.sendMessage(telegramId, formattedMessage, { parse_mode: 'HTML' });
+        success = true;
+      } catch (error) {
+        attempts++;
+        const isNetworkError = error.code === 'EAI_AGAIN' || error.message.includes('EAI_AGAIN') || error.message.includes('ETIMEDOUT') || error.message.includes('ECONNRESET');
+        
+        if (attempts >= maxAttempts || !isNetworkError) {
+            if (error.description && error.description.includes('bot was blocked by the user')) {
+                console.warn(`[Notifier] User ${telegramId} blocked the bot. Updating visibility.`);
+                await prisma.user.update({
+                  where: { telegramId: BigInt(telegramId) },
+                  data: { isActive: false }
+                });
+            } else {
+                console.error(`[Notifier] ❌ Falha definitiva ao enviar para ${telegramId.toString()}: ${error.message || 'Unknown'}`);
+            }
+            break;
+        }
+      }
     }
+
+    if (success && attempts > 0) {
+        logger.info(`[Notifier] ✅ Entregue com sucesso após ${attempts} tentativas extras.`);
+    } else if (success) {
+        logger.info(`[Notifier] ✅ Enviado com sucesso para ${telegramId}`);
+    }
+  } catch (globalError) {
+    logger.error(`[Notifier] Global Error: ${globalError.message}`);
   }
 }
 
