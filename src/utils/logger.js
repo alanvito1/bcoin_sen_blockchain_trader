@@ -61,7 +61,9 @@ const logger = createLogger({
     errors({ stack: true }),
     redact(),
     splat(),
-    json()
+    json({
+      replacer: (key, value) => typeof value === 'bigint' ? value.toString() : value
+    })
   ),
   defaultMeta: { service: 'blockchain-trader' },
   transports: [

@@ -137,11 +137,11 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
   const tokenContract = new ethers.Contract(tokenConfig.address, ERC20_ABI, wallet);
   const routerContract = new ethers.Contract(network.router, ROUTER_ABI, wallet);
 
+  let tokenIn, tokenOut, amountIn, isNativeIn = false, isNativeOut = false;
   try {
     const isStuck = await checkPendingTransactions(networkName, wallet);
     if (isStuck) return null;
 
-    let tokenIn, tokenOut, amountIn, isNativeIn = false, isNativeOut = false;
     const decimals = await withRPCRetry(() => tokenContract.decimals(), networkName);
 
     // --- 1. SET TARGETS AND INPUTS ---
@@ -357,12 +357,25 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     const receipt = await withRPCRetry(() => tx.wait(1), networkName, 5, 4000);
     
     if (receipt.status === 1) {
-      return { ...receipt, status: 1, hash: tx.hash, gasFormatted: ethers.formatEther(receipt.gasUsed * (receipt.gasPrice || 0n)) };
+      const pathLabels = (tokenIn && usdtToken?.address) ? (direction === 'buy' ? `USDT ➔ ${tokenConfig.symbol}` : `${tokenConfig.symbol} ➔ USDT`) : 'Direto';
+      return { 
+          ...receipt, 
+          status: 1, 
+          hash: tx.hash, 
+          gasFormatted: ethers.formatEther(receipt.gasUsed * (receipt.gasPrice || 0n)),
+          path: pathLabels
+      };
     } else {
       throw new Error('STATUS_REVERTED');
     }
+  } catch (err) {
     logger.error(`[${networkName}] Swap Error: ${err.message}`);
     
+    // Extract path for transparency (Safely check for defined variables)
+    const pathLabels = (typeof tokenIn !== 'undefined' && inputTokenOverride?.address) 
+        ? (direction === 'buy' ? `USDT ➔ ${tokenConfig.symbol}` : `${tokenConfig.symbol} ➔ USDT`) 
+        : 'Direto';
+
     // Friendly error mapping for users
     let friendlyError = err.message;
     if (err.message.includes('INSUFFICIENT_OUTPUT_AMOUNT')) {
@@ -375,7 +388,12 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
         friendlyError = `Saldo insuficiente de ${network.nativeSymbol} para pagar as taxas de rede (Gás).`;
     }
 
-    return { status: 0, error: friendlyError, originalError: err.message };
+    return { 
+        status: 0, 
+        error: friendlyError, 
+        originalError: err.message,
+        path: pathLabels
+    };
   }
 }
 

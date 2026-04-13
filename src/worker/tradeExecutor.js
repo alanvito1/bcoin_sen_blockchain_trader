@@ -269,6 +269,7 @@ ${rsiIndicator}
       }
       txHash = swapResult.hash;
       gasUsed = swapResult.gasFormatted || '0.001';
+      result.dexPath = swapResult.path || 'Direto';
     }
 
     // 7. Post-Processing & History
@@ -334,6 +335,7 @@ ${rsiInfo}
 
 💎 Valor: ${executionAmount} ${displaySymbol}
 ⛽ Gás: ${parseFloat(gasUsed).toFixed(6)} ${networkBase.nativeSymbol}
+🛣️ Rota: <code>${result.dexPath || 'DEX Direta'}</code>
 ${balanceText}
 🔗 <a href="${explorerUrl}">Ver no Explorer</a>`;
 
@@ -394,8 +396,11 @@ ${balanceText}
     };
 
   } catch (err) {
-    const errorMsg = err.message || 'Unknown Error';
-    logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${errorMsg}`);
+    const rawError = err.message || 'Unknown Error';
+    const escapeHtml = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const errorMsg = escapeHtml(rawError);
+    
+    logger.error(`[TradeExecutor] Fatal error in job ${job.id} for user ${userId}: ${rawError}`);
     
     let targetTelegramId;
     try {
@@ -423,11 +428,12 @@ ${balanceText}
         if (targetTelegramId) {
           const netLabel = config?.network?.toUpperCase() || 'BATTLESYSTEM';
           const isLiquidityError = errorMsg.toLowerCase().includes('liquidez') || errorMsg.toLowerCase().includes('slippage');
-          
-          let displayError = `🚨 <b>FALHA NO MOTOR [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>`;
+          const dexPath = result?.dexPath || (config?.tokenPair ? `${config.tokenPair.split('/')[0]} ➔ USDT` : 'N/A');
+
+          let displayError = `🚨 <b>FALHA NO MOTOR [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n🛣️ Rota: <code>${dexPath}</code>\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>`;
           
           if (isLiquidityError) {
-            displayError = `⏳ <b>AGUARDANDO CONDIÇÕES [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n\n${errorMsg}\n<i>O motor continuará monitorando em silêncio.</i>`;
+            displayError = `⏳ <b>AGUARDANDO CONDIÇÕES [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n🛣️ Rota: <code>${dexPath}</code>\n\n${errorMsg}\n<i>O motor continuará monitorando em silêncio.</i>`;
           }
 
           await sendUserNotification(targetTelegramId, displayError, isLiquidityError ? 'info' : 'error', 'INFO');

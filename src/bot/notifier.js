@@ -36,7 +36,7 @@ async function sendUserNotification(telegramId, message, type = 'info', category
             await new Promise(resolve => setTimeout(resolve, 2000 * attempts)); // Backoff
         }
 
-        await bot.telegram.sendMessage(telegramId, formattedMessage, { parse_mode: 'HTML' });
+        await bot.telegram.sendMessage(telegramId.toString(), formattedMessage, { parse_mode: 'HTML' });
         success = true;
       } catch (error) {
         attempts++;
