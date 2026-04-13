@@ -217,14 +217,27 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       if (balance < amountIn) throw new Error(`Saldo nativo insuficiente.`);
     }
 
-    // --- 4. SLIPPAGE & SIMULATION (MetaMask Pattern) ---
-    let amountOutMin = (expectedOut * (10000n - BigInt(Math.floor((tokenConfig.slippage || globalConfig.slippage || 1.0) * 100)))) / 10000n;
-    
+    // --- 4. PERFECT SWAPPER: SLIPPAGE & DIVERGENCE GUARD ---
+    // O Padro Gold é basear o slippage na Simulação Real (Pool), validando contra o Oráculo.
+    const userSlippage = BigInt(Math.floor((tokenConfig.slippage || globalConfig.slippage || 1.0) * 100));
+    let amountOutMin = (expectedOut * (10000n - userSlippage)) / 10000n;
+
     if (marketPrice) {
       const amountInNum = parseFloat(ethers.formatUnits(amountIn, inDecimals));
       const fairOutNum = direction === 'buy' ? amountInNum / marketPrice : amountInNum * marketPrice;
       const fairOut = ethers.parseUnits(fairOutNum.toFixed(outDecimals), outDecimals);
-      amountOutMin = (fairOut * (10000n - 1000n)) / 10000n; // 10% safety buffer
+      
+      // Cálculo de Divergência (DEX vs Oráculo)
+      const drift = expectedOut > fairOut 
+        ? (expectedOut - fairOut) * 10000n / fairOut 
+        : (fairOut - expectedOut) * 10000n / fairOut;
+      
+      logger.debug(`[${networkName}] Preço DEX vs Oráculo: Drift de ${(Number(drift)/100).toFixed(2)}%`);
+
+      // Abort se a Pool estiver > 5% diferente do Oráculo (Evita Price Impact / Oráculo Defasado)
+      if (drift > 500n) {
+        throw new Error(`DIVERGENCIA_PRECO: A Pool está ${(Number(drift)/100).toFixed(2)}% fora do Oráculo. Abortando por segurança.`);
+      }
     }
 
     if (tokenConfig.isDryRun) {
@@ -268,6 +281,25 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
         const estimated = await withRPCRetry(() => estimate(), networkName);
         gasLimit = (estimated * 120n) / 100n; // 20% Buffer
         logger.info(`[${networkName}] ✅ Simulação Sucesso (Rota Direta). Gás Estimado (+20%): ${gasLimit.toString()}`);
+
+        // --- 5. ANTI-HONEYPOT SHIELD (Pre-flight Sell Simulation) ---
+        if (direction === 'buy' && !tokenConfig.isDryRun) {
+            logger.debug(`[${networkName}] Shield: Simulando saída estratégica (Anti-Honeypot)...`);
+            try {
+                const sellPath = [...path].reverse();
+                const minUnit = 1n; 
+                await withRPCRetry(() => routerContract.swapExactTokensForETHSupportingFeeOnTransferTokens.staticCall(
+                    minUnit, 0, sellPath, wallet.address, deadline
+                ), networkName).catch(() => {
+                    return withRPCRetry(() => routerContract.swapExactTokensForETH.staticCall(
+                        minUnit, 0, sellPath, wallet.address, deadline
+                    ), networkName);
+                });
+                logger.debug(`[${networkName}] Shield: ✅ Token vendável (Saída autorizada).`);
+            } catch (hError) {
+                throw new Error(`HONEYPOT_DETECTED: Falha ao simular venda. O token pode ser um Honeypot.`);
+            }
+        }
       } catch (simError) {
         logger.warn(`[${networkName}] ⚠️ Simulação FALHOU na Rota Direita: ${simError.message}`);
         
