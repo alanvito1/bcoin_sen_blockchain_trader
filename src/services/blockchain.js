@@ -32,7 +32,15 @@ class BulletproofProvider {
         } catch (err) {
             lastError = err;
             const rpcUrl = this.rpcList[i] || 'unknown';
-            logger.warn(`[Blockchain] ⚠️ Failover (${this.networkKey.toUpperCase()}): node=${rpcUrl} error=${err.message}`);
+
+            // Smart Failover: If it's a Contract Revert (CALL_EXCEPTION), all nodes will return the same.
+            // Do NOT failover or log as 'Warning', just throw immediately to save time.
+            if (err.code === 'CALL_EXCEPTION') {
+                logger.debug(`[Blockchain] 📡 Contract Revert detected: ${err.reason || 'No specific reason'}`);
+                throw err;
+            }
+
+            logger.warn(`[Blockchain] ⚠️ Failover (${this.networkKey.toUpperCase()}): node=${rpcUrl} error=${err.message.slice(0, 100)}`);
             continue;
         }
     }
