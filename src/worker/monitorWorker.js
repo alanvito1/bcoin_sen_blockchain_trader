@@ -16,18 +16,20 @@ const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID;
 
 async function checkTransitIntegrity() {
   try {
-    let transitAddress;
+    const founderWallet = process.env.ADMIN_MASTER_WALLET;
+    const { address: coreGatewayAddress } = await getOrCreateTransitWallet();
     
-    // Priority: Environment Variable (USER provided)
-    if (process.env.TRANSIT_WALLET_ADDRESS) {
-      transitAddress = process.env.TRANSIT_WALLET_ADDRESS;
-    } else {
-      const transit = await getOrCreateTransitWallet();
-      transitAddress = transit?.address;
+    // O monitor deve focar na Gateway Wallet do Core (a que recebe e faz o split)
+    // Se houver uma TRANSIT_WALLET_ADDRESS no env que seja diferente da Founder, monitoramos ela também.
+    let transitAddress = coreGatewayAddress;
+    const envTransit = process.env.TRANSIT_WALLET_ADDRESS;
+
+    if (envTransit && envTransit.toLowerCase() !== founderWallet.toLowerCase()) {
+      transitAddress = envTransit;
     }
 
     if (!transitAddress) {
-      logger.warn('[Monitor] Transit address not found. Skipping integrity check.');
+      logger.warn('[Monitor] Gateway/Transit address not found. Skipping integrity check.');
       return;
     }
 
@@ -45,7 +47,7 @@ async function checkTransitIntegrity() {
         continue;
       }
 
-      logger.info(`[Monitor] Checking integrity on ${net.toUpperCase()} for ${transitAddress}`);
+      logger.info(`[Monitor] Checking integrity on ${net.toUpperCase()} for GATEWAY: ${transitAddress}`);
       const currentNonce = await provider.getTransactionCount(transitAddress);
       const secretKey = `TRANSIT_NONCE_${net.toUpperCase()}`;
 
@@ -61,11 +63,12 @@ async function checkTransitIntegrity() {
         
         if (ADMIN_ID) {
           await sendUserNotification(ADMIN_ID, 
-            `🚨 <b>ALERTA CRÍTICO: VIOLAÇÃO DE COFRE</b>\n\n` +
-            `Detectada atividade não autorizada na Transit Wallet (${net.toUpperCase()}).\n` +
+            `🚨 <b>ALERTA DE SEGURANÇA: GATEWAY CORE</b>\n\n` +
+            `Detectada atividade não autorizada na <b>Gateway Wallet</b> (${net.toUpperCase()}).\n` +
+            `Auditado: <code>${transitAddress}</code>\n\n` +
             `Nonce em Cadeia: ${currentNonce}\n` +
             `Último Nonce Registrado: ${lastKnownNonce}\n\n` +
-            `Verifique o explorer imediatamente!`, 
+            `Se você NÃO executou transações manuais no Core, verifique o explorer imediatamente!`, 
             'error'
           );
         }
