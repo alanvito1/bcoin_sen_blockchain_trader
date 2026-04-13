@@ -443,7 +443,7 @@ ${balanceText}
       }
     }
 
-    const isBalanceError = errorMsg.toLowerCase().includes('insufficient funds') || errorMsg.toLowerCase().includes('gas');
+    const isBalanceError = errorMsg.toLowerCase().includes('insufficient funds') || errorMsg.toLowerCase().includes('gas') || errorMsg.toLowerCase().includes('saldo insuficiente');
     if (isBalanceError) {
       await prisma.tradeConfig.update({
         where: { id: tradeConfigId },
