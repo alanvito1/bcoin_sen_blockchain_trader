@@ -236,7 +236,14 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
       // Abort se a Pool estiver > 5% diferente do Oráculo (Evita Price Impact / Oráculo Defasado)
       if (drift > 500n) {
-        throw new Error(`DIVERGENCIA_PRECO: A Pool está ${(Number(drift)/100).toFixed(2)}% fora do Oráculo. Abortando por segurança.`);
+        const isSafe = globalConfig.projectSafeTokens.includes(tokenConfig.symbol);
+        const shieldEnabled = globalConfig.enableSafetyShields !== false;
+
+        if (isSafe || !shieldEnabled) {
+          logger.warn(`[${networkName}] ⚠️ DIVERGÊNCIA DE PREÇO (${(Number(drift)/100).toFixed(2)}%): Token do Projeto detectado. Prosseguindo com 'Livre Swap'.`);
+        } else {
+          throw new Error(`DIVERGENCIA_PRECO: A Pool está ${(Number(drift)/100).toFixed(2)}% fora do Oráculo. Abortando por segurança.`);
+        }
       }
     }
 
@@ -297,7 +304,14 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
                 });
                 logger.debug(`[${networkName}] Shield: ✅ Token vendável (Saída autorizada).`);
             } catch (hError) {
-                throw new Error(`HONEYPOT_DETECTED: Falha ao simular venda. O token pode ser um Honeypot.`);
+                const isSafe = globalConfig.projectSafeTokens.includes(tokenConfig.symbol);
+                const shieldEnabled = globalConfig.enableSafetyShields !== false;
+
+                if (isSafe || !shieldEnabled) {
+                    logger.warn(`[${networkName}] 🛡️ ALERTA DE SEGURANÇA: Falha na simulação de venda para ${tokenConfig.symbol}. Token do Projeto detectado - Prosseguindo com 'Livre Swap'.`);
+                } else {
+                    throw new Error(`HONEYPOT_DETECTED: Falha ao simular venda. O token pode ser um Honeypot.`);
+                }
             }
         }
       } catch (simError) {

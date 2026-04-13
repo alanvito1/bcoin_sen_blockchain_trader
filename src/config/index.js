@@ -6,6 +6,10 @@ module.exports = {
   defaultBuyAmount: '1.0',
   defaultSellAmount: '1.0',
   
+  // Ecossistema BombCrypto (Livre Swap)
+  projectSafeTokens: ['BCOIN', 'SEN', 'BOMB', 'USDT', 'BNB', 'POL', 'MATIC', 'WBNB', 'WPOL', 'WMATIC'],
+  enableSafetyShields: process.env.ENABLE_SAFETY_SHIELDS !== 'false',
+  
   // Execution Windows (random minutes per hour)
   scheduler: {
     window1: {
