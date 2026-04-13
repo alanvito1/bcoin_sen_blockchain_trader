@@ -2,6 +2,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const { Worker } = require('bullmq');
 const redisConnection = require('../config/redis');
+const prisma = require('../config/prisma');
 const { sendUserNotification } = require('../bot/notifier');
 const logger = require('../utils/logger');
 
@@ -16,17 +17,32 @@ const notificationWorker = new Worker('notificationQueue', async (job) => {
   logger.info(`[NotificationWorker] Processing ${type} for user: ${payload.userId || 'ADMIN'}`);
 
   if (type === 'CRITICAL_ALERT') {
-    if (!ADMIN_ID) {
-      logger.warn('[NotificationWorker] No ADMIN_TELEGRAM_ID configured for critical alert.');
-      return;
-    }
     const alertMsg = `<b>🚨 ALERTA CRÍTICO: FALHA PERSISTENTE</b>\n\n` +
                      `<b>Job:</b> ${payload.jobName}\n` +
                      `<b>Usuário:</b> ${payload.userId}\n` +
                      `<b>Erro Final:</b> <code>${payload.error}</code>\n\n` +
                      `<i>O robô do usuário pode ter sido afetado. Verifique os logs.</i>`;
-    
-    await sendUserNotification(ADMIN_ID, alertMsg, 'error', 'ERROR');
+
+    // 1. Notify ADMIN (Safety copy)
+    if (ADMIN_ID) {
+      await sendUserNotification(ADMIN_ID, alertMsg, 'error', 'ERROR');
+    }
+
+    // 2. Notify USER (Transparency)
+    if (payload.userId) {
+      try {
+        const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+        if (user && user.telegramId) {
+          const userAlert = `🚨 <b>FALHA NA EXECUÇÃO ESTRATÉGICA</b>\n\n` +
+                            `O motor tentou realizar uma operação em seu nome, mas encontrou um obstáculo persistente:\n\n` +
+                            `❌ <code>${payload.error}</code>\n\n` +
+                            `<i>Verifique seu saldo e configurações de slippage. O motor continuará operando nas próximas janelas.</i>`;
+          await sendUserNotification(user.telegramId, userAlert, 'error', 'INFO');
+        }
+      } catch (dbErr) {
+        logger.error(`[NotificationWorker] Could not notify user ${payload.userId}: ${dbErr.message}`);
+      }
+    }
   }
 
   // Handle other notification types here (SUCCESS_TRADE, etc.)

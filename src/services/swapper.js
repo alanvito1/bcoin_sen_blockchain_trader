@@ -207,7 +207,8 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       const inContract = new ethers.Contract(tokenIn, ERC20_ABI, wallet);
       const balance = await withRPCRetry(() => inContract.balanceOf(wallet.address), networkName);
       if (balance < amountIn) {
-        throw new Error(`${isNativeIn ? 'Native' : (inputTokenOverride?.symbol || 'Token')} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${ethers.formatUnits(amountIn, inDecimals)}`);
+        const symbolIn = isNativeIn ? blockchainProviders[networkName].nativeSymbol : (direction === 'sell' ? tokenConfig.symbol : (inputTokenOverride?.symbol || 'Token'));
+        throw new Error(`${symbolIn} saldo insuficiente: ${ethers.formatUnits(balance, inDecimals)} < ${ethers.formatUnits(amountIn, inDecimals)}`);
       }
       
       const allowance = await withRPCRetry(() => inContract.allowance(wallet.address, network.router), networkName);
@@ -360,9 +361,21 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     } else {
       throw new Error('STATUS_REVERTED');
     }
-  } catch (err) {
     logger.error(`[${networkName}] Swap Error: ${err.message}`);
-    return { status: 0, error: err.message };
+    
+    // Friendly error mapping for users
+    let friendlyError = err.message;
+    if (err.message.includes('INSUFFICIENT_OUTPUT_AMOUNT')) {
+        friendlyError = 'Slippage excedido: O preço mudou muito rápido durante o processamento.';
+    } else if (err.message.includes('INSUFFICIENT_LIQUIDITY') || err.message.includes('No route')) {
+        friendlyError = 'Liquidez insuficiente no mercado para este par.';
+    } else if (err.message.includes('TRANSFER_FROM_FAILED')) {
+        friendlyError = 'Falha ao transferir tokens (Pode ser taxa alta ou proteção do contrato).';
+    } else if (err.message.includes('gas required exceeds allowance') || err.message.includes('insufficient funds for gas')) {
+        friendlyError = `Saldo insuficiente de ${network.nativeSymbol} para pagar as taxas de rede (Gás).`;
+    }
+
+    return { status: 0, error: friendlyError, originalError: err.message };
   }
 }
 
