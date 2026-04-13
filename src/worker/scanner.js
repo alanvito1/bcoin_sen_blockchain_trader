@@ -134,7 +134,7 @@ const scannerTask = cron.schedule('* * * * *', async () => {
       }, {
         removeOnComplete: true,
         attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 }
+        backoff: { type: 'exponential', delay: 10000 }
       });
       logger.info(`[Scanner] Queued trade for user: ${config.userId}`);
     }

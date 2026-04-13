@@ -58,7 +58,7 @@ module.exports = {
     bsc: {
       chainId: 56,
       nativeSymbol: 'BNB',
-      rpc: process.env.BSC_RPC || 'https://bsc-dataseed1.defibit.io,https://bsc-dataseed2.defibit.io,https://bsc-rpc.publicnode.com',
+      rpc: process.env.BSC_RPC || 'https://bsc.publicnode.com,https://bsc-dataseed.binance.org,https://bsc-dataseed2.defibit.io,https://1rpc.io/bnb',
       router: '0x10ed43c718714eb63d5aa57b78b54704e256024e',
       wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
       usdt: '0x55d398326f99059fF775485246999027B3197955',
@@ -74,7 +74,7 @@ module.exports = {
     polygon: {
       chainId: 137,
       nativeSymbol: 'POL',
-      rpc: process.env.POLYGON_RPC || 'https://polygon-bor-rpc.publicnode.com,https://polygon.llamarpc.com,https://polygon-shared.public.blastapi.io',
+      rpc: process.env.POLYGON_RPC || 'https://polygon.publicnode.com,https://polygon-bor-rpc.publicnode.com,https://polygon.drpc.org',
       router: '0xa5e0829caced8ffdd4de3c43696c57f7d7a678ff',
       wrappedNative: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
       usdt: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',

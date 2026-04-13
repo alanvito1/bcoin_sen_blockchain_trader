@@ -1,7 +1,7 @@
 /**
  * @file priceFetcher.js
  * @description Centralized background worker that fetches prices for all 4 supported tokens
- * every 60 seconds and stores them in the PriceTick table.
+ * every 30 seconds and stores them in the PriceTick table.
  * This strategy drastically reduces API consumption for GeckoTerminal as multiple users
  * now read from a single local source of truth.
  * @module worker/priceFetcher
@@ -89,7 +89,7 @@ async function saveTick(token, price) {
  * Main loop for fetching all prices.
  */
 async function runLoop() {
-  logger.info('[PriceFetcher] 📡 Updating Local Oracle (1 min cycle)...');
+  logger.info('[PriceFetcher] 📡 Updating Local Oracle (30s cycle)...');
   
   const results = await Promise.allSettled(TOKEN_CONFIG.map(token => fetchPrice(token)));
   
@@ -105,7 +105,7 @@ async function runLoop() {
 
 // Run immediately on start, then every 60 seconds
 runLoop();
-setInterval(runLoop, 60000);
+setInterval(runLoop, 30000);
 
 logger.info('[PriceFetcher] Local Oracle Worker active.');
 
