@@ -104,19 +104,37 @@ async function fetchCandles(symbol, interval, limit = 50) {
 
         if (ticks.length > 0) {
             const candles = [];
-            // Aggregate ticks into candles based on minutesNeeded
-            for (let i = 0; i < ticks.length; i += minutesNeeded) {
-                const group = ticks.slice(i, i + minutesNeeded);
-                if (group.length > 0) {
-                    candles.push({
-                        close: group[0].price, 
-                        time: group[0].timestamp.getTime() / 1000
-                    });
+            const intervalMs = tf.geckoTf === 'hour' ? tf.aggregate * 60 * 60 * 1000 : tf.aggregate * 60 * 1000;
+            
+            // Time-Bucket Aggregation (Industry Standard)
+            // Group ticks by their timestamp window to ensure candles represent real-time duration
+            let currentBucket = Math.floor(ticks[0].timestamp.getTime() / intervalMs) * intervalMs;
+            let currentGroup = [];
+
+            for (const tick of ticks) {
+                const tickTime = tick.timestamp.getTime();
+                const bucket = Math.floor(tickTime / intervalMs) * intervalMs;
+
+                if (bucket === currentBucket) {
+                    currentGroup.push(tick.price);
+                } else {
+                    // Finalize current candle (using the last price in the bucket as 'close')
+                    if (currentGroup.length > 0) {
+                        candles.push({
+                            close: currentGroup[0], // ticks are ordered 'desc', so index 0 is the most recent in the bucket
+                            time: currentBucket / 1000
+                        });
+                    }
+                    // Start new bucket
+                    currentBucket = bucket;
+                    currentGroup = [tick.price];
                 }
+
+                if (candles.length >= limit) break;
             }
 
-            // Return whatever we built (Partial history is better than HOLD)
-            return candles.reverse().slice(-limit);
+            // Return built candles (Partially history is handled by Strategy)
+            return candles.reverse();
         }
         
         logger.warn(`[Strategy] ${symbol} | No data found in DB for ${interval}.`);

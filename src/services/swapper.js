@@ -98,6 +98,10 @@ async function getBestPath(routerContract, amount, tokenIn, tokenOut, bridgeToke
   if (bestPath && bestPath.length > 2) {
     const bridgeSymbol = bestPath[1].toLowerCase().includes('0x0d500') ? 'WPOL' : 'BRIDGE';
     logger.info(`[PathFinder] ⚠️ Rota Direta insuficiente. Ativando Rota Triangular via ${bridgeSymbol} (${mode.toUpperCase()}).`);
+  } else if (!bestPath) {
+    // Zero-Friction Fallback (MetaMask style): If all bridges failed, try direct In->Out even if liquidation is unknown.
+    logger.warn(`[PathFinder] 📉 Todas as rotas de ponte falharam. Forçando Rota Direta para evitar bloqueio.`);
+    bestPath = [tokenIn, tokenOut];
   }
 
   return bestPath;
@@ -286,8 +290,8 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
       try {
         const estimated = await withRPCRetry(() => estimate(), networkName);
-        gasLimit = (estimated * 120n) / 100n; // 20% Buffer
-        logger.info(`[${networkName}] ✅ Simulação Sucesso (Rota Direta). Gás Estimado (+20%): ${gasLimit.toString()}`);
+        gasLimit = (estimated * 130n) / 100n; // 30% Buffer
+        logger.info(`[${networkName}] ✅ Simulação Sucesso (Rota Direta). Gás Estimado (+30%): ${gasLimit.toString()}`);
 
         // --- 5. ANTI-HONEYPOT SHIELD (Pre-flight Sell Simulation) ---
         if (direction === 'buy' && !tokenConfig.isDryRun) {
@@ -324,9 +328,9 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
             
             if (altPath && altPath.length > 2) {
                 const altEstimated = await withRPCRetry(() => estimate(altPath), networkName);
-                gasLimit = (altEstimated * 120n) / 100n;
+                gasLimit = (altEstimated * 130n) / 100n;
                 path.splice(0, path.length, ...altPath); // Update path in-place
-                logger.info(`[${networkName}] ✅ Simulação Sucesso (ROTA TRIANGULAR). Gás Estimado (+20%): ${gasLimit.toString()}`);
+                logger.info(`[${networkName}] ✅ Simulação Sucesso (ROTA TRIANGULAR). Gás Estimado (+30%): ${gasLimit.toString()}`);
             } else {
                 throw new Error(`Ambas as rotas falharam na simulação (Liquidez/Price Impact). Original error: ${simError.message}`);
             }
