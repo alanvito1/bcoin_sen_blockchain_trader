@@ -12,6 +12,7 @@ class BulletproofProvider {
     this.networkKey = networkKey;
     const netConfig = config.networks[networkKey];
     this.rpcList = netConfig.rpc.split(',').map(url => url.trim()).filter(Boolean);
+    logger.debug(`[Blockchain] 📡 Loaded ${this.rpcList.length} RPC nodes for ${networkKey.toUpperCase()}`);
     
     this.providers = this.rpcList.map(url => new ethers.JsonRpcProvider(url, netConfig.chainId, { staticNetwork: true }));
     

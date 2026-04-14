@@ -71,12 +71,14 @@ async function processTradeJob(job) {
   let config = null;
   let walletData = null;
   let wallet = null;
-  let result = null;
+  let result = { signal: 'UNKNOWN', price: 0 }; // Initialized for safe catch access
   let executionAmount = 0;
   let txHash = null;
   let gasUsed = '0.001';
   let tokenSymbol = 'N/A';
+  let displaySymbol = 'N/A';
   let isDryRun = false;
+  let netLabel = 'CHAIN';
 
   try {
     // 1. Fetch data from Prisma
@@ -104,9 +106,9 @@ async function processTradeJob(job) {
 
     // --- NETWORK & NOMENCLATURE PREPARATION (UX Rules) ---
     const netKey = config.network.toLowerCase();
-    const netLabel = netKey.toUpperCase();
+    netLabel = netKey.toUpperCase();
     [tokenSymbol] = config.tokenPair.split('/');
-    const displaySymbol = (netKey === 'polygon' && tokenSymbol.toUpperCase() === 'BCOIN') ? 'BOMB' : tokenSymbol;
+    displaySymbol = (netKey === 'polygon' && tokenSymbol.toUpperCase() === 'BCOIN') ? 'BOMB' : tokenSymbol;
 
     // 2. Strategy Check (Quiet background analysis)
     

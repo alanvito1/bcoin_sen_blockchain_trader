@@ -137,6 +137,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
   const tokenContract = new ethers.Contract(tokenConfig.address, ERC20_ABI, wallet);
   const routerContract = new ethers.Contract(network.router, ROUTER_ABI, wallet);
 
+  const NATIVE_ADDR = '0x0000000000000000000000000000000000000000';
   let tokenIn, tokenOut, amountIn, isNativeIn = false, isNativeOut = false;
   try {
     const isStuck = await checkPendingTransactions(networkName, wallet);
@@ -144,12 +145,15 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
     const decimals = await withRPCRetry(() => tokenContract.decimals(), networkName);
 
-    // --- 1. SET TARGETS AND INPUTS ---
+    // --- 1. SET TARGETS AND INPUTS (POL/BNB Native Normalization) ---
     if (direction === 'buy') {
       tokenIn = inputTokenOverride ? inputTokenOverride.address : network.wrappedNative;
       tokenOut = tokenConfig.address;
-      isNativeIn = !inputTokenOverride;
+      isNativeIn = !inputTokenOverride || inputTokenOverride.address === NATIVE_ADDR;
       
+      // Force Wrapped for pathing
+      if (tokenIn === NATIVE_ADDR) tokenIn = network.wrappedNative;
+
       if (amountType === 'token' && customAmount) {
         logger.step(`[${networkName}] BUY: Estimando custo para ${customAmount} ${tokenConfig.symbol} via Multi-Hop...`);
         const bridges = networkName === 'polygon' 
@@ -168,8 +172,11 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     } else { // SELL
       tokenIn = tokenConfig.address;
       tokenOut = inputTokenOverride ? inputTokenOverride.address : network.wrappedNative;
-      isNativeOut = !inputTokenOverride;
+      isNativeOut = !inputTokenOverride || inputTokenOverride.address === NATIVE_ADDR;
       
+      // Force Wrapped for pathing
+      if (tokenOut === NATIVE_ADDR) tokenOut = network.wrappedNative;
+
       if (customAmount) {
         amountIn = ethers.parseUnits(customAmount.toString(), decimals);
       } else {
@@ -345,12 +352,36 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
     const txOptions = { ...baseOptions, gasLimit };
     let tx;
-    if (isNativeIn) {
-      tx = await routerContract.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, wallet.address, deadline, txOptions);
-    } else if (isNativeOut) {
-      tx = await routerContract.swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, txOptions);
-    } else {
-      tx = await routerContract.swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, txOptions);
+    let broadcastAttempts = 0;
+    const maxBroadcastAttempts = 2;
+
+    while (broadcastAttempts < maxBroadcastAttempts) {
+      try {
+        const currentOptions = { ...txOptions };
+        if (broadcastAttempts > 0) {
+          // Agressive Gas Bump for Retry (20% increase)
+          if (currentOptions.maxPriorityFeePerGas) currentOptions.maxPriorityFeePerGas = (currentOptions.maxPriorityFeePerGas * 120n) / 100n;
+          if (currentOptions.maxFeePerGas) currentOptions.maxFeePerGas = (currentOptions.maxFeePerGas * 120n) / 100n;
+          if (currentOptions.gasPrice) currentOptions.gasPrice = (currentOptions.gasPrice * 120n) / 100n;
+          logger.warn(`[${networkName}] ⛽ Bumping GAS for Retry (+20%). Attempt ${broadcastAttempts + 1}`);
+        }
+
+        if (isNativeIn) {
+          tx = await routerContract.swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, wallet.address, deadline, currentOptions);
+        } else if (isNativeOut) {
+          tx = await routerContract.swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, currentOptions);
+        } else {
+          tx = await routerContract.swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, wallet.address, deadline, currentOptions);
+        }
+        break; // Success
+      } catch (broadcastErr) {
+        broadcastAttempts++;
+        const isUnderpriced = broadcastErr.message.includes('underpriced') || broadcastErr.message.includes('low priority');
+        if (broadcastAttempts < maxBroadcastAttempts && isUnderpriced) {
+          continue;
+        }
+        throw broadcastErr;
+      }
     }
 
     logger.info(`[${networkName}] 🔄 Tx Broadcasted (MetaMask Standard): ${tx.hash}`);
