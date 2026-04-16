@@ -22,12 +22,12 @@ The token market on EVM blockchains requires speed and discipline. Manually trac
 
 ```mermaid
 graph LR
-    User((User)) <--> Bot[Bot UI (Telegram)]
-    Bot <--> DB[(Prisma / Postgres)]
-    Scanner[Auto-Scanner] -->|Signals| DB
-    Scanner -->|Jobs| Queue((Redis / BullMQ))
-    Queue -->|Processes| Executor[Trade Executor]
-    Executor --> DEX[DEX / On-Chain]
+    User(("User")) <--> Bot["Bot UI (Telegram)"]
+    Bot <--> DB[("Prisma / Postgres")]
+    Scanner["Auto-Scanner"] -->|Signals| DB
+    Scanner -->|Jobs| Queue(("Redis / BullMQ"))
+    Queue -->|Processes| Executor["Trade Executor"]
+    Executor --> DEX["DEX / On-Chain"]
 ```
 
 ---
