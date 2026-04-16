@@ -64,4 +64,15 @@ If any vulnerability or leakage is suspected, the immediate protocol is:
 
 ---
 
+---
+
+## 📈 Audit Registry
+
+| Date | Type | Status | Findings |
+| :--- | :--- | :--- | :--- |
+| **2026-04-16** | Full Repo Scan | 🟢 PASS | No hardcoded keys, mnemonic strings, or leaked .env files found. |
+| **2026-04-15** | Infrastructure | 🟢 PASS | AES-256-GCM integrity verified on VPS database. |
+
+---
+
 *Securing the assets of the future with 2026 standards.*

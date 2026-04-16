@@ -113,5 +113,11 @@ prisma/dev.db
 # next.js build output
 .next
 
+# Agent Intelligence
+.agent/
+.agents/
+.gemini/
+.antigravity/
+
 # macOS
 .DS_Store

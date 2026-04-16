@@ -241,7 +241,7 @@ async function setupStrategyAMenu(ctx) {
   const tfA = normalizeTF(config.timeframeA || '30m');
 
   const text =
-    `🔥 <b>Arena &gt; ${config.network} &gt; ${config.tokenPair.split('/')[0]} &gt; Explosivo A</b>\n` +
+    `🔥 <b>Arena &gt; ${config.network} &gt; ${config.tokenPair?.split('/')[0] || 'TOKEN'} &gt; Explosivo A</b>\n` +
     `Status: <b>${config.strategy30m ? '🟢 Ativa' : '🔴 Inativa'}</b>  |  Timeframe: <code>${tfA}</code>  |  MA: <code>MA${config.maPeriodA}</code>\n\n` +
     `Calibre o poder de fogo desta estratégia:`;
 
@@ -263,7 +263,7 @@ async function setupStrategyBMenu(ctx) {
   const tfB = normalizeTF(config.timeframeB || '4h');
 
   const text =
-    `💥 <b>Arena &gt; ${config.network} &gt; ${config.tokenPair.split('/')[0]} &gt; Explosivo B</b>\n` +
+    `💥 <b>Arena &gt; ${config.network} &gt; ${config.tokenPair?.split('/')[0] || 'TOKEN'} &gt; Explosivo B</b>\n` +
     `Status: <b>${config.strategy4h ? '🟢 Ativa' : '🔴 Inativa'}</b>  |  Timeframe: <code>${tfB}</code>  |  MA: <code>MA${config.maPeriodB}</code>\n\n` +
     `Calibre o poder de fogo desta estratégia:`;
 
@@ -303,7 +303,7 @@ function buildTimeframeButtons(current, prefixAction, backAction) {
 async function timeframeSelectorA(ctx) {
   const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
   const current = normalizeTF(config.timeframeA || '30m');
-  const token = config.tokenPair.split('/')[0];
+  const token = config.tokenPair?.split('/')[0] || 'TOKEN';
 
   const text =
     `⏱ <b>Motores &gt; ${config.network} &gt; ${token} &gt; Timeframe — Estratégia A</b>\n\n` +
@@ -320,7 +320,7 @@ async function timeframeSelectorA(ctx) {
 async function timeframeSelectorB(ctx) {
   const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
   const current = normalizeTF(config.timeframeB || '4h');
-  const token = config.tokenPair.split('/')[0];
+  const token = config.tokenPair?.split('/')[0] || 'TOKEN';
 
   const text =
     `⏱ <b>Motores &gt; ${config.network} &gt; ${token} &gt; Timeframe — Estratégia B</b>\n\n` +
@@ -349,7 +349,7 @@ async function setTimeframe(ctx, strategyField, tf, menuFn) {
 // ---------------------------------------------------------------------------
 async function setupRsiMenu(ctx) {
   const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
-  const token = config.tokenPair.split('/')[0];
+  const token = config.tokenPair?.split('/')[0] || 'TOKEN';
 
   const text =
     `📊 <b>Arena &gt; ${config.network} &gt; ${token} &gt; Sensor RSI</b>\n\n` +
@@ -385,7 +385,7 @@ async function toggleRsi(ctx) {
 // ---------------------------------------------------------------------------
 async function strategySelectorMenu(ctx) {
   const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
-  const token = config.tokenPair.split('/')[0];
+  const token = config.tokenPair?.split('/')[0] || 'TOKEN';
   const tfA = normalizeTF(config.timeframeA || '30m');
   const tfB = normalizeTF(config.timeframeB || '4h');
 
@@ -432,7 +432,7 @@ const INTERVAL_PRESETS = [
 
 async function setupScheduleMenu(ctx) {
   const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
-  const token = config.tokenPair.split('/')[0];
+  const token = config.tokenPair?.split('/')[0] || 'TOKEN';
   const mode = config.scheduleMode || 'window';
 
   const scheduleDesc = mode === 'interval'
@@ -501,7 +501,7 @@ async function setIntervalPreset(ctx, minutes) {
 // ---------------------------------------------------------------------------
 async function setupWindowsMenu(ctx) {
   const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
-  const token = config.tokenPair.split('/')[0];
+  const token = config.tokenPair?.split('/')[0] || 'TOKEN';
 
   const text =
     `⏰ <b>Motores &gt; ${config.network} &gt; ${token} &gt; Janelas</b>\n` +

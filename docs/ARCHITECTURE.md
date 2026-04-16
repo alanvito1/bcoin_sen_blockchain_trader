@@ -1,12 +1,12 @@
 # 🏗️ ARCHITECTURE: Blockchain Trader Skeleton
 
-Documentação técnica profunda sobre a estrutura, fluxos de dados e segurança do 'Blockchain Trader'.
+Technical documentation on the structure, data flows, and security of 'Blockchain Trader'.
 
-## 📱 Visão Geral da Arquitetura (C4 Model - Level 1)
+## 📱 Architecture Overview (C4 Model - Level 1)
 
 ```mermaid
 graph TD
-    User((Usuário Telegram))
+    User((Telegram User))
     Bot[Telegram Bot UI]
     DB[(PostgreSQL - Prisma)]
     Queue[(Redis - BullMQ)]
@@ -18,47 +18,47 @@ graph TD
     API[GeckoTerminal API]
     DEX[DEX - Pancake/QuickSwap]
     
-    User -->|Comandos/Menu| Bot
+    User -->|Commands/Menu| Bot
     Bot -->|CRUD Config| DB
-    PriceFetcher -->|Atualiza Preços| DB
+    PriceFetcher -->|Update Prices| DB
     Scanner -->|Period Check| DB
     Scanner -->|Get Market Data| API
-    Scanner -->|Enfileira Jobs| Queue
-    Queue -->|Processa Trades| Worker
+    Scanner -->|Enqueue Jobs| Queue
+    Queue -->|Process Trades| Worker
     Billing -->|Check Credits| DB
-    Worker -->|Executa Swap| DEX
-    Worker -->|Log Histórico| DB
-    Notification -->|Alertas| Bot
+    Worker -->|Execute Swap| DEX
+    Worker -->|Log History| DB
+    Notification -->|Alerts| Bot
 ```
 
 ---
 
-## 📂 Estrutura de Arquivos (Project Map)
+## 📂 File Structure (Project Map)
 
-O projeto segue um padrão de organização modular para garantir escalabilidade:
+The project follows a modular organization pattern to ensure scalability and clarity for the Open Source community:
 
-- **`/src`**: Código fonte principal.
-    - `api/`: Controladores e rotas (se houver).
-    - `bot/`: Lógica do Telegram UI e menus.
-    - `worker/`: Processos em background (Scanner, Executor, Billing, etc).
-    - `config/`: Configurações de Banco (Prisma) e Redis.
-    - `services/`: Lógica de negócio e integrações blockchain.
-    - `utils/`: Loggers e helpers de criptografia.
-- **`/prisma`**: Definições de schema e migrações.
-- **`/legacy`**: Arquivamento de scripts de teste e arquivos órfãos (Fase 1 Discovery).
-- **`/logs`**: Logs operacionais (`combined.log`, `error.log`).
-- **`/docker`**: Arquivos de configuração de infraestrutura.
-- **`index.js`**: Orquestrador de inicialização de todos os serviços.
+- **`/src`**: Main source code (Business Logic).
+    - `bot/`: Telegram Interface (Menus, Telegraf).
+    - `worker/`: Background Workers (Scanner, Executor, Billing).
+    - `services/`: Blockchain Services, Swapper, and Pricing.
+    - `config/`: Configuration Singleton (Prisma, Redis, Env).
+- **`/test`**: Test suite (Database, RPC, Balances, Trade Logic).
+- **`/scripts`**: Utility, deployment, and assisted audit scripts.
+- **`/docs`**: Detailed technical documentation and manuals.
+- **`/tools`**: On-chain analysis tools and pool debugging.
+- **`/prisma`**: Database schema and migrations.
+- **`index.js`**: Entry point (System Bootloader).
+- **`docker-compose.yml`**: Infrastructure orchestrator (Postgres/Redis/Bot).
 
 ---
 
-## 🗄️ Modelo de Dados (ERD)
+## 🗄️ Data Model (ERD)
 
 ```mermaid
 erDiagram
-    User ||--|| Wallet : "possui"
-    User ||--o{ TradeConfig : "configura"
-    User ||--o{ TradeHistory : "registra"
+    User ||--|| Wallet : "has"
+    User ||--o{ TradeConfig : "configures"
+    User ||--o{ TradeHistory : "records"
     
     User {
         string id PK
@@ -100,23 +100,23 @@ erDiagram
 
 ---
 
-## 🛡️ Protocolo de Segurança: Carteiras Criptografadas
+## 🛡️ Security Protocol: Encrypted Wallets
 
-O sistema armazena chaves privadas utilizando **AES-256-GCM**, garantindo que as chaves nunca fiquem em texto claro no banco de dados.
+The system stores private keys using **AES-256-GCM**, ensuring that keys are never stored in plain text in the database.
 
-### Fluxo de Criptografia:
-1.  **Entrada**: Usuário fornece a Private Key via bot (opcional - geração interna recomendada).
-2.  **Processo**: 
-    - Geração de um IV (Initialization Vector) único.
-    - Criptografia com `ENCRYPTION_KEY` (armazenada em `.env` na VPS).
-    - Obtenção do AuthTag (GCM).
-3.  **Armazenamento**: `encryptedPrivateKey`, `iv` e `authTag` são salvos no banco.
+### Encryption Flow:
+1.  **Input**: User provides the Private Key via bot (optional - internal generation recommended).
+2.  **Process**: 
+    - Generation of a unique IV (Initialization Vector).
+    - Encryption with `ENCRYPTION_KEY` (stored in `.env` on the VPS).
+    - Obtaining the AuthTag (GCM).
+3.  **Storage**: `encryptedPrivateKey`, `iv`, and `authTag` are saved in the database.
 
 ---
 
-## 🔄 Ciclo de Decisão de Trade (Scanner/Strategy)
+## 🔄 Trade Decision Cycle (Scanner/Strategy)
 
-O sistema opera em um ciclo contínuo de "Scan -> Queue -> Execute". Abaixo o detalhamento do fluxo:
+The system operates in a continuous "Scan -> Queue -> Execute" cycle. Below is the flow detail:
 
 ```mermaid
 sequenceDiagram
@@ -127,29 +127,41 @@ sequenceDiagram
     participant BC as Blockchain (DEX)
     participant DB as Prisma (PostgreSQL)
 
-    S->>DB: Busca usuários ativos (isOperating=true)
-    S->>GT: Consulta preços e indicadores (OHLCV)
-    Note over S: Aplica lógica de Médias Móveis (MA21)
+    S->>DB: Fetch active users (isOperating=true)
+    S->>GT: Query prices and indicators (OHLCV)
+    Note over S: Applies Moving Average logic (MA21)
     
-    alt Sinal de Compra/Venda Gerado
-        S->>R: Adiciona Job 'executeTrade'
+    alt Trade Signal Generated
+        S->>R: Add 'executeTrade' Job
     end
 
-    R->>E: Notifica disponibilidade de Job
-    E->>DB: Busca chave privada criptografada
-    E->>BC: Verifica saldo e executa Swap (ethers.js)
-    BC-->>E: Retorna txHash
-    E->>DB: Registra TradeHistory e desconta créditos
-    E->>S: (Via Notification) Envia alerta ao Telegram
+    R->>E: Notify Job availability
+    E->>DB: Fetch encrypted private key
+    E->>BC: Verify balance and execute Swap (ethers.js)
+    BC-->>E: Return txHash
+    E->>DB: Record TradeHistory and deduct credits
+    E->>S: (Via Notification) Send Telegram alert
 ```
 
-### Detalhamento das Etapas:
+### Step Detail:
 
-1.  **Check de Operação**: O `Scanner` verifica se o usuário tem saldo de créditos positivo e se o bot está ligado.
-2.  **Check de Janela**: Validação se o minuto atual está em uma das janelas configuradas (ex: 15-29m).
-3.  **Análise de Sinal**:
-    - Obtém velas de 15m e 4h via GeckoTerminal.
-    - Calcula MA21 e outros indicadores (RSI opcional).
-    - **BUY**: Preço cruza ABAIXO da MA(15m) e MA(4h) indica tendência de alta.
-    - **SELL**: Preço cruza ACIMA da MA(15m).
-4.  **Execução**: O `TradeExecutor` gerencia a assinatura da transação e o envio para a rede (BSC/Polygon).
+1.  **Operation Check**: The `Scanner` checks if the user has a positive credit balance and if the bot is turned on.
+2.  **Window Check**: Validation of whether the current minute is within one of the configured windows (e.g., 15-29m).
+3.  **Signal Analysis**:
+    - Gets 15m and 4h candles via GeckoTerminal.
+    - Calculates MA21 and other indicators (RSI optional).
+    - **BUY**: Price crosses BELOW MA(15m) and MA(4h) indicates uptrend.
+    - **SELL**: Price crosses ABOVE MA(15m).
+4.  **Execution**: The `TradeExecutor` manages transaction signing and submission to the network (BSC/Polygon).
+5.  **Operational Audit**: The script `src/scripts/audit_fix.js` allows for manual integrity verification of all components (RPC, DB, Redis, Wallet).
+
+---
+
+## 🛠️ Maintenance and Aegis (OpenClaw) Deactivation
+
+Originally, the system used an AI module called **Aegis (OpenClaw)** for automatic error detection and correction. After production auditing, this module was **DEACTIVATED** for the following reasons:
+-   **API Instability**: Recurring failures in the AI token limit (Google Gemini).
+-   **Notification Loops**: The system entered recursion when trying to report network errors through the same unstable network.
+-   **Operational Security**: Remote auto-maintenance was replaced by an **Assisted Audit** model, where the administrator uses diagnostic tools to validate the system before manual interventions.
+
+Currently, Aegis remains in the repository only as historical reference, not interfering with the main execution cycle.

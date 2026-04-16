@@ -128,7 +128,7 @@ async function showTransitWalletHandler(ctx) {
 async function broadcastHandler(ctx) {
   if (ctx.from.id.toString() !== ADMIN_ID?.toString()) return;
 
-  const message = ctx.message.text.split('/broadcast ')[1];
+  const message = ctx.message?.text?.split('/broadcast ')[1];
   if (!message) return ctx.reply('⚠️ Use: /broadcast Sua mensagem aqui');
 
   const users = await prisma.user.findMany({ where: { isActive: true } });
@@ -199,7 +199,7 @@ async function dbHealthHandler(ctx) {
       `💳 <b>Carteiras:</b> ${health.wallets}\n` +
       `📈 <b>Total Trades:</b> ${health.trades}\n\n` +
       `📋 <b>Últimos 5 Trades:</b>\n` +
-      health.lastTrades.map(t => `- [${t.createdAt.toISOString().split('T')[0]}] ${t.type} -> ${t.status}`).join('\n');
+      health.lastTrades.map(t => `- [${t.createdAt?.toISOString()?.split('T')[0] || 'DATA'}] ${t.type} -> ${t.status}`).join('\n');
 
     return ctx.replyWithHTML(text);
   } catch (err) {

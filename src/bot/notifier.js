@@ -11,8 +11,10 @@ const logger = require('../utils/logger');
  */
 async function sendUserNotification(telegramId, message, type = 'info', category = 'TRADE') {
   try {
+    if (!telegramId) return;
+    
     const user = await prisma.user.findUnique({
-      where: { telegramId: BigInt(telegramId) },
+      where: { telegramId: BigInt(telegramId.toString()) },
       select: { notifyTrades: true, notifyBalances: true, notifySteps: true }
     });
 
@@ -77,6 +79,19 @@ function formatMessage(message, type) {
   return `${icons[type] || '🔔'} ${message}`;
 }
 
+/**
+ * Sends a notification directly to the ADMIN_ID.
+ */
+async function sendAdminNotification(message, type = 'error') {
+  const adminId = process.env.ADMIN_ID;
+  if (!adminId) {
+    logger.warn('[Notifier] ADMIN_ID not set. Skipping admin notification.');
+    return;
+  }
+  return sendUserNotification(adminId, message, type, 'ERROR');
+}
+
 module.exports = {
-  sendUserNotification
+  sendUserNotification,
+  sendAdminNotification
 };

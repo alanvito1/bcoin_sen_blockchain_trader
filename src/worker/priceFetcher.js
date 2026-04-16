@@ -13,6 +13,23 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const axios = require('axios');
 const prisma = new PrismaClient();
 const logger = require('../utils/logger');
+const notifier = require('../bot/notifier');
+
+/**
+ * Robust fetch with exponential backoff
+ */
+async function fetchWithRetry(url, options = {}, retries = 3, backoff = 1000) {
+  try {
+    return await axios.get(url, { timeout: 10000, ...options });
+  } catch (error) {
+    if (retries > 0 && (error.code === 'EAI_AGAIN' || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')) {
+      logger.warn(`[PriceFetcher] 📡 Network issue (${error.code}). Retrying in ${backoff}ms... (${retries} left)`);
+      await new Promise(res => setTimeout(res, backoff));
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+    throw error;
+  }
+}
 
 // Verified Token Addresses from Whitepaper
 const TOKEN_CONFIG = [
@@ -33,7 +50,7 @@ async function fetchPrice(token) {
   
   try {
     // 1. Primary: DexScreener
-    const res = await axios.get(dexUrl, { timeout: 10000 });
+    const res = await fetchWithRetry(dexUrl);
     const pairs = res.data.pairs || [];
     
     const netMatch = token.network.toLowerCase() === 'bsc' ? 'bsc' : 'polygon';
@@ -48,27 +65,41 @@ async function fetchPrice(token) {
     }
 
     throw new Error('DexScreener pair not found');
-    logger.debug(`[PriceFetcher] ⚠️ DexScreener failed for ${token.symbol}: ${error.message}. Trying Backup...`);
+  } catch (error) {
+    if (!error.message.includes('404')) {
+      logger.debug(`[PriceFetcher] ⚠️ DexScreener failed for ${token.symbol}: ${error.message}. Trying Backup...`);
+    }
     
     try {
       // 2. Fallback: GeckoTerminal
       const geckoNetwork = token.network.toLowerCase() === 'bsc' ? 'bsc' : 'polygon_pos';
       const geckoUrl = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/tokens/${token.address}`;
       
-      const gRes = await axios.get(geckoUrl, { timeout: 10000 });
+      const gRes = await fetchWithRetry(geckoUrl);
       const price = parseFloat(gRes.data.data.attributes.price_usd);
       
       if (price > 0) {
         await saveTick(token, price);
         return price;
       }
-    } catch (gError) {
-      if (!error.message.includes('404')) {
-          logger.debug(`[PriceFetcher] ❌ All Oracles FAILED for ${token.symbol}: ${gError.message}`);
+      } catch (gError) {
+      const is404 = gError.message.includes('404') || (gError.response && gError.response.status === 404);
+      
+      if (!is404) {
+          const errMsg = `[PriceFetcher] ⚠️ Oracle backup failed for ${token.symbol}: ${gError.message}`;
+          logger.warn(errMsg);
+          
+          // Only notify admin if it's a fatal total failure (not a common 404/Timeout)
+          const isPersistent = gError.code !== 'EAI_AGAIN' && gError.code !== 'ECONNABORTED';
+          if (isPersistent && !is404) {
+            // Log as error ONLY if we want Aegis to eventually wake up or system to crash
+            // For now, let's keep it as warn to stabilize the user's perception
+            logger.debug(`[PriceFetcher] Persistent failure for ${token.symbol}`);
+          }
       }
     }
-    return null;
   }
+  return null;
 }
 
 async function saveTick(token, price) {

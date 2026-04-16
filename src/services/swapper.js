@@ -51,7 +51,7 @@ async function checkPendingTransactions(networkName, wallet) {
   
   if (noncePending > nonceLatest) {
     const diff = noncePending - nonceLatest;
-    logger.warn(`[${networkName}] Detectada(s) ${diff} transação(ões) PENDENTE(S). A fila está travada.`);
+    logger.warn(`[${networkName}] Detected ${diff} PENDING transaction(s). Queue is stuck.`);
     return true;
   }
   return false;
@@ -97,10 +97,10 @@ async function getBestPath(routerContract, amount, tokenIn, tokenOut, bridgeToke
 
   if (bestPath && bestPath.length > 2) {
     const bridgeSymbol = bestPath[1].toLowerCase().includes('0x0d500') ? 'WPOL' : 'BRIDGE';
-    logger.info(`[PathFinder] ⚠️ Rota Direta insuficiente. Ativando Rota Triangular via ${bridgeSymbol} (${mode.toUpperCase()}).`);
+    logger.info(`[PathFinder] ⚠️ Direct Route insufficient. Activating Triangular Route via ${bridgeSymbol} (${mode.toUpperCase()}).`);
   } else if (!bestPath) {
     // Zero-Friction Fallback (MetaMask style): If all bridges failed, try direct In->Out even if liquidation is unknown.
-    logger.warn(`[PathFinder] 📉 Todas as rotas de ponte falharam. Forçando Rota Direta para evitar bloqueio.`);
+    logger.warn(`[PathFinder] 📉 All bridge routes failed. Forcing Direct Route to avoid blockage.`);
     bestPath = [tokenIn, tokenOut];
   }
 
@@ -124,12 +124,12 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       const mevProvider = mevProviders[networkName];
       if (mevProvider && wallet.privateKey) {
           broadcastWallet = new ethers.Wallet(wallet.privateKey, mevProvider);
-          logger.info(`[${networkName}] 🛡️ Anti-Sandwich ATIVADO: Usando RPC Protegido.`);
+          logger.info(`[${networkName}] 🛡️ Anti-Sandwich ENABLED: Using Protected RPC.`);
       } else {
           broadcastWallet = mevWallets[networkName] || wallet;
       }
     } catch (e) {
-      logger.warn(`[${networkName}] Falha ao conectar ao RPC MEV. Usando canal padrão.`);
+      logger.warn(`[${networkName}] Failed to connect to MEV RPC. Using standard channel.`);
     }
   }
 
@@ -155,7 +155,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       if (tokenIn === NATIVE_ADDR) tokenIn = network.wrappedNative;
 
       if (amountType === 'token' && customAmount) {
-        logger.step(`[${networkName}] BUY: Estimando custo para ${customAmount} ${tokenConfig.symbol} via Multi-Hop...`);
+        logger.step(`[${networkName}] BUY: Estimating cost for ${customAmount} ${tokenConfig.symbol} via Multi-Hop...`);
         const bridges = networkName === 'polygon' 
           ? [network.usdt, '0x7ceB23fD6bC0ad59E62c2551523066Ab99653907', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'] 
           : [network.usdt, '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d'];
@@ -220,13 +220,13 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
       
       const allowance = await withRPCRetry(() => inContract.allowance(wallet.address, network.router), networkName);
       if (allowance < amountIn) {
-        logger.step(`[${networkName}] Aprovando Token para o Router...`);
+        logger.step(`[${networkName}] Approving Token for Router...`);
         const approveTx = await withRPCRetry(() => inContract.approve(network.router, ethers.MaxUint256), networkName);
         await withRPCRetry(() => approveTx.wait(), networkName, 10, 3000);
       }
     } else {
       const balance = await withRPCRetry(() => wallet.provider.getBalance(wallet.address), networkName);
-      if (balance < amountIn) throw new Error(`Saldo nativo insuficiente.`);
+      if (balance < amountIn) throw new Error(`Insufficient native balance.`);
     }
 
     // --- 4. PERFECT SWAPPER: SLIPPAGE & DIVERGENCE GUARD ---
@@ -244,17 +244,17 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
         ? (expectedOut - fairOut) * 10000n / fairOut 
         : (fairOut - expectedOut) * 10000n / fairOut;
       
-      logger.debug(`[${networkName}] Preço DEX vs Oráculo: Drift de ${(Number(drift)/100).toFixed(2)}%`);
+      logger.debug(`[${networkName}] DEX vs Oracle Price: Drift of ${(Number(drift)/100).toFixed(2)}%`);
 
-      // Abort se a Pool estiver > 5% diferente do Oráculo (Evita Price Impact / Oráculo Defasado)
+      // Abort if the Pool is > 5% different from Oracle (Prevents Price Impact / Lagging Oracle)
       if (drift > 500n) {
         const isSafe = globalConfig.projectSafeTokens.includes(tokenConfig.symbol);
         const shieldEnabled = globalConfig.enableSafetyShields !== false;
 
         if (isSafe || !shieldEnabled) {
-          logger.warn(`[${networkName}] ⚠️ DIVERGÊNCIA DE PREÇO (${(Number(drift)/100).toFixed(2)}%): Token do Projeto detectado. Prosseguindo com 'Livre Swap'.`);
+          logger.warn(`[${networkName}] ⚠️ PRICE DIVERGENCE (${(Number(drift)/100).toFixed(2)}%): Project Token detected. Proceeding with 'Free Swap'.`);
         } else {
-          throw new Error(`DIVERGENCIA_PRECO: A Pool está ${(Number(drift)/100).toFixed(2)}% fora do Oráculo. Abortando por segurança.`);
+          throw new Error(`PRICE_DIVERGENCE: Pool is ${(Number(drift)/100).toFixed(2)}% off Oracle. Aborting for safety.`);
         }
       }
     }
@@ -287,7 +287,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     }
 
     // SIMULATION GATE (MetaMask Pattern)
-    logger.step(`[${networkName}] Simulando transação (MetaMask Pattern)...`);
+    logger.step(`[${networkName}] Simulating transaction (MetaMask Pattern)...`);
     let gasLimit;
     try {
       const estimate = async (p = path) => {
@@ -303,7 +303,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
 
         // --- 5. ANTI-HONEYPOT SHIELD (Pre-flight Sell Simulation) ---
         if (direction === 'buy' && !tokenConfig.isDryRun) {
-            logger.debug(`[${networkName}] Shield: Simulando saída estratégica (Anti-Honeypot)...`);
+            logger.debug(`[${networkName}] Shield: Simulating strategic exit (Anti-Honeypot)...`);
             try {
                 const sellPath = [...path].reverse();
                 const minUnit = 1n; 
@@ -314,15 +314,15 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
                         minUnit, 0, sellPath, wallet.address, deadline
                     ), networkName);
                 });
-                logger.debug(`[${networkName}] Shield: ✅ Token vendável (Saída autorizada).`);
+                logger.debug(`[${networkName}] Shield: ✅ Token sellable (Authorized exit).`);
             } catch (hError) {
                 const isSafe = globalConfig.projectSafeTokens.includes(tokenConfig.symbol);
                 const shieldEnabled = globalConfig.enableSafetyShields !== false;
 
                 if (isSafe || !shieldEnabled) {
-                    logger.warn(`[${networkName}] 🛡️ ALERTA DE SEGURANÇA: Falha na simulação de venda para ${tokenConfig.symbol}. Token do Projeto detectado - Prosseguindo com 'Livre Swap'.`);
+                    logger.warn(`[${networkName}] 🛡️ SECURITY ALERT: Sell simulation failed for ${tokenConfig.symbol}. Project Token detected - Proceeding with 'Free Swap'.`);
                 } else {
-                    throw new Error(`HONEYPOT_DETECTED: Falha ao simular venda. O token pode ser um Honeypot.`);
+                    throw new Error(`HONEYPOT_DETECTED: Failed to simulate sell. Token might be a Honeypot.`);
                 }
             }
         }
@@ -331,23 +331,23 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
         
         // Fallback to Triangular Route if available and not already used
         if (path.length === 2 && routingBridges.length > 0) {
-            logger.step(`[${networkName}] 🔄 Tentando Fallback para Rota Triangular via Simulação...`);
+            logger.step(`[${networkName}] 🔄 Attempting Fallback to Triangular Route via Simulation...`);
             const altPath = await getBestPath(routerContract, amountIn, tokenIn, tokenOut, routingBridges.filter(b => b.toLowerCase() !== network.wrappedNative.toLowerCase()), 'out');
             
             if (altPath && altPath.length > 2) {
                 const altEstimated = await withRPCRetry(() => estimate(altPath), networkName);
                 gasLimit = (altEstimated * 130n) / 100n;
                 path.splice(0, path.length, ...altPath); // Update path in-place
-                logger.info(`[${networkName}] ✅ Simulação Sucesso (ROTA TRIANGULAR). Gás Estimado (+30%): ${gasLimit.toString()}`);
+                logger.info(`[${networkName}] ✅ Simulation Success (TRIANGULAR ROUTE). Estimated Gas (+30%): ${gasLimit.toString()}`);
             } else {
-                throw new Error(`Ambas as rotas falharam na simulação (Liquidez/Price Impact). Original error: ${simError.message}`);
+                throw new Error(`Both routes failed in simulation (Liquidity/Price Impact). Original error: ${simError.message}`);
             }
         } else {
             throw simError;
         }
       }
     } catch (finalSimError) {
-      throw new Error(`[SIMULATION_FAILED] A transação falharia na Blockchain: ${finalSimError.message}`);
+      throw new Error(`[SIMULATION_FAILED] Transaction would fail on Blockchain: ${finalSimError.message}`);
     }
 
     const txOptions = { ...baseOptions, gasLimit };
@@ -388,7 +388,7 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     const receipt = await withRPCRetry(() => tx.wait(1), networkName, 5, 4000);
     
     if (receipt.status === 1) {
-      const pathLabels = (tokenIn && usdtToken?.address) ? (direction === 'buy' ? `USDT ➔ ${tokenConfig.symbol}` : `${tokenConfig.symbol} ➔ USDT`) : 'Direto';
+      const pathLabels = (tokenIn && inputTokenOverride?.address) ? (direction === 'buy' ? `USDT ➔ ${tokenConfig.symbol}` : `${tokenConfig.symbol} ➔ USDT`) : 'Direct';
       return { 
           ...receipt, 
           status: 1, 
@@ -410,13 +410,13 @@ async function swapToken(networkName, tokenConfig, direction = 'sell', customAmo
     // Friendly error mapping for users
     let friendlyError = err.message;
     if (err.message.includes('INSUFFICIENT_OUTPUT_AMOUNT')) {
-        friendlyError = 'Slippage excedido: O preço mudou muito rápido durante o processamento.';
+        friendlyError = 'Slippage exceeded: Price moved too fast during processing.';
     } else if (err.message.includes('INSUFFICIENT_LIQUIDITY') || err.message.includes('No route')) {
-        friendlyError = 'Liquidez insuficiente no mercado para este par.';
+        friendlyError = 'Insufficient liquidity in the market for this pair.';
     } else if (err.message.includes('TRANSFER_FROM_FAILED')) {
-        friendlyError = 'Falha ao transferir tokens (Pode ser taxa alta ou proteção do contrato).';
+        friendlyError = 'Failed to transfer tokens (Might be a high tax or contract protection).';
     } else if (err.message.includes('gas required exceeds allowance') || err.message.includes('insufficient funds for gas')) {
-        friendlyError = `Saldo insuficiente de ${network.nativeSymbol} para pagar as taxas de rede (Gás).`;
+        friendlyError = `Insufficient ${network.nativeSymbol} balance to pay network fees (Gas).`;
     }
 
     return { 

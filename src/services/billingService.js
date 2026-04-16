@@ -29,6 +29,8 @@ async function consumeCredit(userId, txHash) {
     data: { credits: { decrement: 1 } }
   });
 
+  logger.info(`[Billing] Credito consumido com sucesso para o usuário ${userId}. Hash: ${txHash}. Saldo restante: ${updatedUser.credits}`);
+
   // Kill Switch: Pause if no credits left
   if (updatedUser.credits <= 0) {
     await prisma.tradeConfig.updateMany({

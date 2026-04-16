@@ -11,11 +11,10 @@ const logger = require('../utils/logger');
 const scannerTask = cron.schedule('* * * * *', async () => {
   const now = new Date();
   const currentMinute = now.getMinutes();
-  logger.info(`[Scanner] Running scan for minute: ${currentMinute}`);
+  logger.debug(`[Scanner] Running scan for minute: ${currentMinute}`);
 
-  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID 
-    ? BigInt(process.env.ADMIN_TELEGRAM_ID) 
-    : (process.env.TELEGRAM_CHAT_ID ? BigInt(process.env.TELEGRAM_CHAT_ID) : null);
+  const rawAdminId = process.env.ADMIN_TELEGRAM_ID || process.env.TELEGRAM_CHAT_ID;
+  const adminTelegramId = (rawAdminId && /^\d+$/.test(rawAdminId)) ? BigInt(rawAdminId) : null;
 
   try {
     // 1. Find eligible users (Active, with Wallet)
@@ -100,7 +99,7 @@ const scannerTask = cron.schedule('* * * * *', async () => {
             const netLabel = config.network.toUpperCase();
             const { sendUserNotification } = require('../bot/notifier');
             sendUserNotification(user.telegramId, 
-              `⏳ <b>Janela Ativa (${windowMin}-${windowMax}m) [Rede: ${netLabel}]</b>\nPar: ${config.tokenPair}\nMinuto de disparo: ${targetMinute}. Aguardando em silêncio...`, 
+              `⏳ <b>Active Window (${windowMin}-${windowMax}m) [Network: ${netLabel}]</b>\nPair: ${config.tokenPair}\nTarget Minute: ${targetMinute}. Waiting silently...`, 
               'info', 'STEP'
             );
             

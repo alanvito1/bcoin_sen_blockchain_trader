@@ -143,15 +143,15 @@ async function processTradeJob(job) {
           const rsiIndicator = config.rsiEnabled ? `📊 RSI: ${result.rsiValue ? result.rsiValue.toFixed(2) : 'N/A'} (Veto se > ${result.rsiThreshold})` : '📊 RSI: Desativado';
           const displayPair = `${displaySymbol}/USDT`;
           
-          const combatLog = `⚖️ <b>Veredito: HOLD [Rede: ${netLabel}]</b>
+          const combatLog = `⚖️ <b>Verdict: HOLD [Network: ${netLabel}]</b>
 Par: <code>${displayPair}</code>
 
-💰 Preço: ${result.price.toFixed(6)}
-📉 Baliza MA: ${result.maRecent ? result.maRecent.toFixed(6) : 'N/A'} (Pivot)
+💰 Price: ${result.price.toFixed(6)}
+📉 MA Threshold: ${result.maRecent ? result.maRecent.toFixed(6) : 'N/A'} (Pivot)
 ${rsiIndicator}
 
-📝 <i>Motivo: ${result.reason}</i>
-⏳ <i>Retentando em silêncio no backgound...</i>`;
+📝 <i>Reason: ${result.reason}</i>
+⏳ <i>Retrying silently in the background...</i>`;
 
           await sendUserNotification(user.telegramId, combatLog, 'info', 'STEP');
       }
@@ -252,6 +252,11 @@ ${rsiIndicator}
       // 6. Execution (The Moment of Truth)
       const networkBase = globalConfig.networks[netKey];
       const usdtToken = networkBase.tokens.find(t => t.symbol === 'USDT');
+      
+      if (!usdtToken) {
+          throw new Error(`USDT Token configuration not found for network: ${netKey}`);
+      }
+      
       const direction = result.signal.toLowerCase();
       
       const swapResult = await swapper.swapToken(
@@ -308,7 +313,7 @@ ${rsiIndicator}
         const tokenBalance = currentNet.tokens[tokenSymbol] || '0.00';
         
         balanceText = `
-📊 <b>Saldos Pós-Trade</b>
+📊 <b>Post-Trade Balances</b>
 - ${networkBase.nativeSymbol}: ${currentNet.nativeBalance}
 - USDT: ${stableBalance}
 - ${displaySymbol}: ${tokenBalance}`;
@@ -318,28 +323,28 @@ ${rsiIndicator}
     }
 
     const notificationText = isDryRun
-      ? `🧪 <b>SIMULAÇÃO CONCLUÍDA [Rede: ${netLabel}]</b>
-Par: <code>${displaySymbol}/USDT</code>
-Bomba disparada virtualmente.
+      ? `🧪 <b>SIMULATION COMPLETED [Network: ${netLabel}]</b>
+Pair: <code>${displaySymbol}/USDT</code>
+Engine fired virtually.
 
-💰 Preço: ${result.price.toFixed(6)}
-📉 Baliza MA: ${result.maRecent?.toFixed(6)}
+💰 Price: ${result.price.toFixed(6)}
+📉 MA Threshold: ${result.maRecent?.toFixed(6)}
 ${rsiInfo}
 
-<i>Efeito surpresa testado com sucesso.</i>`
-      : `✅ <b>DETONAÇÃO REALIZADA! [Rede: ${netLabel}]</b>
-Par: <b>${displaySymbol}/USDT</b>
-Tipo: <b>${result.signal}</b>
+<i>Simulated effect tested successfully.</i>`
+      : `✅ <b>TRADE EXECUTED! [Network: ${netLabel}]</b>
+Pair: <b>${displaySymbol}/USDT</b>
+Type: <b>${result.signal}</b>
 
-💰 Preço: ${result.price.toFixed(6)}
-📉 Baliza MA: ${result.maRecent?.toFixed(6)}
+💰 Price: ${result.price.toFixed(6)}
+📉 MA Threshold: ${result.maRecent?.toFixed(6)}
 ${rsiInfo}
 
-💎 Valor: ${executionAmount} ${displaySymbol}
-⛽ Gás: ${parseFloat(gasUsed).toFixed(6)} ${networkBase.nativeSymbol}
-🛣️ Rota: <code>${result.dexPath || 'DEX Direta'}</code>
+💎 Amount: ${executionAmount} ${displaySymbol}
+⛽ Gas: ${parseFloat(gasUsed).toFixed(6)} ${networkBase.nativeSymbol}
+🛣️ Route: <code>${result.dexPath || 'Direct DEX'}</code>
 ${balanceText}
-🔗 <a href="${explorerUrl}">Ver no Explorer</a>`;
+🔗 <a href="${explorerUrl}">View on Explorer</a>`;
 
     await sendUserNotification(user.telegramId, notificationText, isDryRun ? 'info' : 'success');
 
@@ -432,10 +437,10 @@ ${balanceText}
           const isLiquidityError = errorMsg.toLowerCase().includes('liquidez') || errorMsg.toLowerCase().includes('slippage');
           const dexPath = result?.dexPath || (config?.tokenPair ? `${config.tokenPair.split('/')[0]} ➔ USDT` : 'N/A');
 
-          let displayError = `🚨 <b>FALHA NO MOTOR [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n🛣️ Rota: <code>${dexPath}</code>\n\nO motor encontrou um obstáculo tático:\n<code>${errorMsg}</code>`;
+          let displayError = `🚨 <b>ENGINE FAILURE [Network: ${netLabel}]</b>\nPair: ${config?.tokenPair || 'N/A'}\n🛣️ Route: <code>${dexPath}</code>\n\nThe engine encountered a tactical obstacle:\n<code>${errorMsg}</code>`;
           
           if (isLiquidityError) {
-            displayError = `⏳ <b>AGUARDANDO CONDIÇÕES [Rede: ${netLabel}]</b>\nPar: ${config?.tokenPair || 'N/A'}\n🛣️ Rota: <code>${dexPath}</code>\n\n${errorMsg}\n<i>O motor continuará monitorando em silêncio.</i>`;
+            displayError = `⏳ <b>AWAITING CONDITIONS [Network: ${netLabel}]</b>\nPair: ${config?.tokenPair || 'N/A'}\n🛣️ Route: <code>${dexPath}</code>\n\n${errorMsg}\n<i>The engine will continue monitoring silently.</i>`;
           }
 
           await sendUserNotification(targetTelegramId, displayError, isLiquidityError ? 'info' : 'error', 'INFO');
@@ -445,12 +450,24 @@ ${balanceText}
       }
     }
 
-    const isBalanceError = errorMsg.toLowerCase().includes('insufficient funds') || errorMsg.toLowerCase().includes('gas') || errorMsg.toLowerCase().includes('saldo insuficiente');
+    const isBalanceError = errorMsg.toLowerCase().includes('insufficient funds') || 
+                           errorMsg.toLowerCase().includes('gas') || 
+                           errorMsg.toLowerCase().includes('saldo insuficiente');
+                           
     if (isBalanceError) {
+      logger.warn(`[TradeExecutor] ⚡ AUTO-PAUSE triggered for user ${userId} due to balance/gas failure.`);
+      
       await prisma.tradeConfig.update({
         where: { id: tradeConfigId },
         data: { isOperating: false }
       }).catch(() => {});
+
+      if (targetTelegramId) {
+        await sendUserNotification(targetTelegramId, 
+          `🛑 <b>OPERATION PAUSED [Network: ${config?.network?.toUpperCase() || 'CHAIN'}]</b>\n\nI've identified that your wallet is out of <b>gas (MATIC/BNB)</b> or has insufficient balance to complete the trade.\n\nRefill your wallet and reactivate the bot in the panel to continue.`, 
+          'warning'
+        );
+      }
     }
 
     throw err; // Re-throw for BullMQ retries/monitoring

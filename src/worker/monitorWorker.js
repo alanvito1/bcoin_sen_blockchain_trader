@@ -14,6 +14,10 @@ const logger = require('../utils/logger');
 
 const ADMIN_ID = process.env.ADMIN_TELEGRAM_ID;
 
+// Aegis Auto-Maintainer (Self-Healing Overlay) - DEACTIVATED
+// const aegis = require('../services/aegis/eye');
+// aegis.start();
+
 async function checkTransitIntegrity() {
   try {
     const founderWallet = process.env.ADMIN_MASTER_WALLET;

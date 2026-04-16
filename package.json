@@ -20,9 +20,10 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.3.0",
     "@telegraf/session": "^2.0.0-beta.7",
     "axios": "^1.13.6",

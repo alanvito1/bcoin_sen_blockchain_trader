@@ -26,9 +26,4 @@ echo "5. Iniciando backend com nova configuracao e aguardando subida completa...
 docker-compose up -d --build
 sleep 20
 
-echo "6. Truncando tabelas no Prisma..."
-docker exec -i trader-engine npx prisma db execute --stdin << 'EOF'
-TRUNCATE "Wallet", "TradeHistory" CASCADE;
-EOF
-
 echo "=== TRANCA DE PRODUCAO CONCLUIDA ==="

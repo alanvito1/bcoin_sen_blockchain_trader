@@ -36,7 +36,7 @@ async function seedUser() {
 
     // 2. Encrypt and Save Wallet
     const encrypted = encryption.encrypt(pk);
-    const walletAddress = "0x1674CD8445d4B0E2a4f69BB01Ba55318727BeE80"; // Based on your previous env check
+    const walletAddress = "0x0000000000000000000000000000000000000000"; // Substitua pelo endereço da sua carteira de teste
 
     await prisma.wallet.upsert({
       where: { userId: user.id },

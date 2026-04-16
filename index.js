@@ -69,6 +69,11 @@ async function bootstrap() {
 
     console.log('  [7/7] - Transit Monitor...');
     require('./src/worker/monitorWorker');
+    await delay(1000);
+
+    console.log('  [8/8] - Aegis Auto-Maintainer (STANDBY)...');
+    // const aegis = require('./src/services/aegis/eye');
+    // aegis.start();
 
     console.log('✅ [System] All Workers Initialized and Synchronized.');
   } catch (workerErr) {

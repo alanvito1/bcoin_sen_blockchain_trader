@@ -94,6 +94,7 @@ try {
     showTransitWalletHandler
   } = require('./commands/admin');
 
+
   const { supportPanelHandler, supportWizard } = require('./features/support');
   const { manualPanelHandler } = require('./features/manual');
   const { referralPanelHandler, showLootHistoryHandler, setupPayoutAddressScene } = require('./features/referral');
@@ -136,20 +137,18 @@ try {
   console.log('[INIT] Registering Routes...');
   register('command', 'start', startHandler);
   register('command', 'add', (ctx) => ctx.scene.enter('ADD_TOKEN_SCENE'));
-  register('command', 'loja', storePanelHandler);
+  register('command', 'store', storePanelHandler);
   register('command', 'wallet', walletPanelHandler);
-  register('command', 'carteira', walletPanelHandler);
   register('command', 'referral', referralPanelHandler);
-  register('command', 'indicacao', referralPanelHandler);
-  register('command', 'status', statusHandler);
-  register('command', 'historico', historyHandler);
-  register('command', 'ajuda', supportPanelHandler);
+  register('command', 'history', historyHandler);
+  register('command', 'help', supportPanelHandler);
   register('command', 'rotate_wallet', rotateTransitWalletHandler);
   register('command', 'reveal_transit', revealTransitWalletHandler);
   register('command', 'show_transit', showTransitWalletHandler);
+
   register('command', 'cancel', async (ctx) => {
     await ctx.scene.leave();
-    return ctx.reply('❌ Operação cancelada. Digite /start para o menu principal.');
+    return ctx.reply('❌ Operation canceled. Type /start for the main menu.');
   });
 
   // Actions
@@ -199,8 +198,8 @@ try {
   bot.action(/^manage_(.+)_(.+)$/, (ctx) => engineConfigHandler(ctx, ctx.match[1], ctx.match[2]));
   bot.action('manage_engine', async (ctx) => {
     const config = await prisma.tradeConfig.findUnique({ where: { id: ctx.session.selectedEngineId } });
-    if (!config) return ctx.answerCbQuery('⚠️ Bomba não selecionada.');
-    return engineConfigHandler(ctx, config.network, config.tokenPair.split('/')[0]);
+    if (!config) return ctx.answerCbQuery('⚠️ No engine selected.');
+    return engineConfigHandler(ctx, config.network, config.tokenPair?.split('/')[0] || 'TOKEN');
   });
 
   bot.action('update_pair', selectPairHandler);
@@ -261,7 +260,7 @@ try {
   // Terms & Admin
   bot.action('accept_terms', async (ctx) => {
     await prisma.user.update({ where: { telegramId: BigInt(ctx.from.id) }, data: { hasAcceptedTerms: true } });
-    await ctx.answerCbQuery('✅ Termos aceitos!');
+    await ctx.answerCbQuery('✅ Terms accepted!');
     return startHandler(ctx);
   });
   
@@ -273,7 +272,7 @@ try {
   bot.action('admin_db_health', dbHealthHandler);
   bot.action('broadcast_prompt', async (ctx) => {
     await ctx.answerCbQuery();
-    return ctx.reply('📢 Envie a mensagem de broadcast abaixo usando o comando:\n/broadcast SUA MENSAGEM');
+    return ctx.reply('📢 Send the broadcast message below using the command:\n/broadcast YOUR MESSAGE');
   });
 
   bot.action(/^buy_package_(.+)$/, (ctx) => selectNetworkHandler(ctx, ctx.match[1]));
@@ -281,8 +280,12 @@ try {
   // Global Error Catch
   bot.catch((err, ctx) => {
     logger.error(`[Telegraf] Error for ${ctx.updateType}:`, err);
+    if (err.description && err.description.includes('Too Many Requests')) {
+      logger.warn('[Telegraf] 429 Rate Limit hit. Skipping global error reply to avoid loop.');
+      return;
+    }
     try {
-      return ctx.replyWithHTML('❌ <b>Ocorreu um erro inesperado.</b> Tente novamente em alguns instantes.');
+      return ctx.replyWithHTML('❌ <b>An unexpected error occurred.</b> Please try again in a few moments.').catch(() => {});
     } catch (e) {
       logger.error('[Telegraf] Silent failure in error reporter:', e);
     }

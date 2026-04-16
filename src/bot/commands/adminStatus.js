@@ -12,9 +12,9 @@ const ERC20_ABI = ["function balanceOf(address account) view returns (uint256)"]
  */
 async function adminStatusHandler(ctx) {
   const telegramId = ctx.from.id.toString();
-  const ownerId = process.env.TELEGRAM_CHAT_ID;
+  const ownerId = process.env.ADMIN_TELEGRAM_ID;
 
-  if (telegramId !== ownerId) {
+  if (telegramId !== ownerId?.toString()) {
     return ctx.reply('⛔ Acesso Negado. Este comando é exclusivo para o administrador.');
   }
 
@@ -32,6 +32,7 @@ async function adminStatusHandler(ctx) {
     const activeUsers = await prisma.user.count({ where: { isActive: true } });
     
     // 3. Calculate Total Referral Debt
+
     const aggregates = await prisma.user.aggregate({
       _sum: {
         referralBalanceUSDT: true,
@@ -73,8 +74,16 @@ async function getAdminBalances(address) {
   const priceService = require('../../services/priceService');
   
   const polyUSDT = new Contract(config.networks.polygon.usdt, ERC20_ABI, providers.polygon);
-  const bscBCOIN = new Contract(config.networks.bsc.tokens.find(t => t.symbol === 'BCOIN').address, ERC20_ABI, providers.bsc);
-  const bscSEN = new Contract(config.networks.bsc.tokens.find(t => t.symbol === 'SEN').address, ERC20_ABI, providers.bsc);
+  
+  const bcoinToken = config.networks.bsc.tokens.find(t => t.symbol === 'BCOIN');
+  const senToken = config.networks.bsc.tokens.find(t => t.symbol === 'SEN');
+  
+  if (!bcoinToken || !senToken) {
+    throw new Error('Configuração de tokens BCOIN/SEN não encontrada para a rede BSC.');
+  }
+
+  const bscBCOIN = new Contract(bcoinToken.address, ERC20_ABI, providers.bsc);
+  const bscSEN = new Contract(senToken.address, ERC20_ABI, providers.bsc);
 
   const [balPolyUSDT, balBscBCOIN, balBscSEN] = await Promise.all([
     polyUSDT.balanceOf(address),
