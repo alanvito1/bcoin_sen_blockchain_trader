@@ -1,9 +1,9 @@
 # 🚀 Blockchain Trader: Multi-Chain Auto-Trader Bot
 
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-Active-green.svg?style=flat-square)]()
-[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg?style=flat-square)]()
-[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)]()
-[![Blockchain](https://img.shields.io/badge/Networks-BSC%20%7C%20Polygon-orange.svg?style=flat-square)]()
+![CI/CD](https://img.shields.io/badge/CI%2FCD-Active-green.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)
+![Networks](https://img.shields.io/badge/Networks-BSC%20%7C%20Polygon-orange.svg?style=flat-square)
 
 **'Blockchain Trader' is a high-precision autonomous trading system designed to operate tokens (BCOIN, SEN) on the BSC and Polygon networks. Equipped with technical indicators (MA, RSI) and anti-sandwich protection, the bot automates the full trade cycle via Telegram.**
 
@@ -61,11 +61,11 @@ docker compose up -d --build
 
 For a deep technical immersion, explore the following manuals:
 
--   [🗺️ SYSTEM_ATLAS.md](docs/SYSTEM_ATLAS.md): Complete inventory of services, tables, and flows.
--   [🏗️ ARCHITECTURE.md](docs/ARCHITECTURE.md): Technical sequence diagrams, ERD, and Security.
--   [🛠️ USAGE_GUIDE.md](docs/USAGE_GUIDE.md): End-user manual and bot menus.
--   [🛡️ SECURITY.md](docs/SECURITY.md): Security guidelines and auditing.
--   [🚀 CONTRIBUTING.md](CONTRIBUTING.md): How to contribute to the project.
+- [System Atlas](docs/SYSTEM_ATLAS.md): Complete inventory of services, tables, and flows.
+- [Architecture & Security](docs/ARCHITECTURE.md): Technical sequence diagrams, ERD, and Security.
+- [Usage Guide](docs/USAGE_GUIDE.md): End-user manual and bot menus.
+- [Security Guidelines](docs/SECURITY.md): Security guidelines and auditing.
+- [Contributing](CONTRIBUTING.md): How to contribute to the project.
 
 ---
 
