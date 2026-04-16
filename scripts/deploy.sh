@@ -2,9 +2,9 @@
 # 🚀 Deployment script for VPS
 
 # Step 1: Update code
-echo "Pulling latest code from live-production branch..."
+echo "Pulling latest code from main branch..."
 git fetch origin
-git reset --hard origin/live-production
+git reset --hard origin/main
 
 # Step 2: Build and restart containers using production config
 echo "Restarting containers..."

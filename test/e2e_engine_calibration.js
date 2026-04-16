@@ -16,8 +16,8 @@ const targetPair = 'BSC_BCOIN';
 const targetSlippage = 12.0;
 
 // VPS Config
-const vpsIp = '177.153.33.7';
-const sshKey = 'C:\\Users\\alan-\\.ssh\\id_ed25519';
+const vpsIp = '<VPS_IP>';
+const sshKey = '<PATH_TO_SSH_KEY>';
 
 async function runE2E() {
     console.log('🏁 [E2E] Iniciando Teste de Calibragem Full-Cycle...');
